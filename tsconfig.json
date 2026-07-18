@@ -1,0 +1,43 @@
+{
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts"
+  ],
+  
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2023",
+    "baseUrl": "./",
+    "rootDir": "src",
+    "outDir": "./dist",
+    "paths": {
+      "@/*": [
+        "src/*"
+      ],
+      "@api/*": [
+        "src/api/*"
+      ],
+    },
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "types": [
+      "node",
+      "jest"
+    ],
+    "sourceMap": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": false,
+    "ignoreDeprecations": "6.0",
+  },
+}

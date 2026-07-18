@@ -1,0 +1,130 @@
+{{#> base
+  title="Verify Your Email Address"
+  preview="Please verify your email address to activate your neurox account."
+  supportEmail="support@neurox.local"
+  companyName="neurox"
+}}
+
+<!-- ── Category badge -->
+<mj-table padding="0 0 20px" align="center">
+  <tr>
+    <td style="text-align: center">
+      <span
+        style="
+          display: inline-block;
+          font-family:
+            &quot;Geist&quot;,
+            &quot;SF Pro Display&quot;,
+            -apple-system,
+            BlinkMacSystemFont,
+            &quot;Segoe UI&quot;,
+            Helvetica,
+            Arial,
+            sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          color: #2563eb;
+          background-color: #eff6ff;
+          border: 1px solid #bfdbfe;
+          border-radius: 20px;
+          padding: 4px 14px;
+        "
+        class="t-label"
+        >Email Verification</span
+      >
+    </td>
+  </tr>
+</mj-table>
+
+<!-- ── Heading -->
+<mj-text
+  align="center"
+  font-size="26px"
+  font-weight="700"
+  line-height="1.25"
+  letter-spacing="-0.5px"
+  color="#0f172a"
+  padding="0 0 10px"
+  css-class="t-heading"
+  >Verify your email address</mj-text
+>
+
+<!-- ── Subheading -->
+<mj-text
+  align="center"
+  font-size="15px"
+  color="#64748b"
+  line-height="1.7"
+  padding="0 0 28px"
+  css-class="t-body"
+>
+  Please click the button below to verify your email and activate your neurox
+  account.
+</mj-text>
+
+<!-- ── CTA Button -->
+<mj-button
+  href="{{verifyLink}}"
+  background-color="#1f6feb"
+  color="#ffffff"
+  border-radius="8px"
+  inner-padding="12px 24px"
+  css-class="neurox-btn"
+  padding="10px 0 20px"
+>
+  Verify Email
+</mj-button>
+
+<!-- ── Expiry Warning Box -->
+<mj-text padding="0 0 20px">
+  <div
+    style="
+      background-color: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      border-radius: 8px;
+      padding: 14px 16px;
+    "
+    class="box-warning"
+  >
+    <span
+      style="
+        font-family:
+          &quot;Geist&quot;,
+          &quot;SF Pro Display&quot;,
+          -apple-system,
+          BlinkMacSystemFont,
+          &quot;Segoe UI&quot;,
+          Helvetica,
+          Arial,
+          sans-serif;
+        font-size: 13px;
+        color: #92400e;
+        line-height: 1.6;
+      "
+    >
+      <strong style="font-weight: 600">⏱ This link expires in 1 hour.</strong
+      ><br />
+      If you didn’t request this, you can safely ignore this email.
+    </span>
+  </div>
+</mj-text>
+
+<!-- ── Support note -->
+<mj-text
+  font-size="12px"
+  color="#94a3b8"
+  line-height="1.7"
+  padding="0"
+  css-class="t-muted"
+>
+  If you have any questions, please contact our support team at
+  <a
+    href="mailto:support@neurox.local"
+    style="color: #2563eb; text-decoration: none"
+    >support@neurox.local</a
+  >.
+</mj-text>
+
+{{/base}}

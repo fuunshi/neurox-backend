@@ -1,0 +1,102 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: ${IMAGE_FULL}
+    restart: unless-stopped
+    env_file:
+      - .env.uat
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    networks:
+      - neurox_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+ 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: ${IMAGE_FULL}
+    restart: unless-stopped
+    env_file:
+      - .env.uat
+    environment:
+      NODE_ENV: production
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    command: ["node", "dist/worker.main.js"]   # matches start:worker:prod in package.json
+    networks:
+      - neurox_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+ 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - neurox_net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+ 
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - neurox_net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+ 
+volumes:
+  rabbitmq_data:
+ 
+networks:
+  neurox_net:
+    driver: bridge

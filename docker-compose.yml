@@ -1,0 +1,94 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: neurox-backend:prod
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://neurox:neurox@postgres:5432/neurox?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://neurox:neurox@rabbitmq:5672
+      RABBITMQ_URLS: amqp://neurox:neurox@rabbitmq:5672
+      RABBITMQ_MAIL_QUEUE: mail.outbound
+      APP_BASE_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    command: ["pnpm", "run", "start:prod"]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    image: neurox-backend:prod
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://neurox:neurox@postgres:5432/neurox?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://neurox:neurox@rabbitmq:5672
+      RABBITMQ_URLS: amqp://neurox:neurox@rabbitmq:5672
+      RABBITMQ_MAIL_QUEUE: mail.outbound
+      APP_BASE_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: ["pnpm", "run", "start:worker:prod"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: neurox
+      RABBITMQ_DEFAULT_PASS: neurox
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: neurox
+      POSTGRES_USER: neurox
+      POSTGRES_PASSWORD: neurox
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neurox -d neurox"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_data:

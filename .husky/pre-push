@@ -1,0 +1,6 @@
+#!/bin/sh
+
+npm run build || {
+  echo "❌ Build failed. Push aborted."
+  exit 1
+}

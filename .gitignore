@@ -1,0 +1,42 @@
+# Node.js dependencies
+/node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.*.local
+
+# Build output
+/dist/
+/build/
+
+# Dependency directories
+/.pnp/
+/.pnp.js
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+
+# MacOS files
+.DS_Store
+
+# Miscellaneous
+*.bak
+*.tmp
+
+.vscode/
+.zed/
+
+.pnpm_store
+.pnpm-store

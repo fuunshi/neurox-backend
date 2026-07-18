@@ -1,0 +1,288 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ENUMS ====================
+
+enum Role {
+  USER
+  RESEARCHER
+  ADMIN
+  MODERATOR
+  SUPER_ADMIN
+
+  @@map("role")
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+
+  @@map("account_status")
+}
+
+enum TokenType {
+  ACCESS
+  REFRESH
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+
+  @@map("token_type")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  PASSWORD_CHANGE
+  ROLE_CHANGE
+  TOKEN_REVOKE
+
+  @@map("audit_action")
+}
+
+// ==================== USER MODEL ====================
+
+model User {
+  id                  String        @id @default(uuid()) @map("user_id")
+  email               String        @unique @map("email")
+  username            String        @unique @map("username")
+  password            String        @map("password")
+  role                Role          @default(USER) @map("role")
+  status              AccountStatus @default(PENDING_VERIFICATION) @map("status")
+  isActive            Boolean       @default(true) @map("is_active")
+  emailVerified       Boolean       @default(false) @map("email_verified")
+  emailVerifiedAt     DateTime?     @map("email_verified_at")
+  phoneVerified       Boolean       @default(false) @map("phone_verified")
+  phoneVerifiedAt     DateTime?     @map("phone_verified_at")
+  twoFactorEnforced   Boolean       @default(false) @map("two_factor_enforced")
+  twoFactorEnabled    Boolean       @default(false) @map("two_factor_enabled")
+  twoFactorSecret     String?       @map("two_factor_secret")
+  passwordChangedAt   DateTime?     @map("password_changed_at")
+  lastLoginAt         DateTime?     @map("last_login_at")
+  lastLoginIp         String?       @map("last_login_ip")
+  forcePasswordChange Boolean       @default(false) @map("force_password_change")
+  failedLoginAttempts Int           @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?     @map("locked_until")
+  deletedAt           DateTime?     @map("deleted_at") // Soft delete
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  profile            UserProfile?
+  tokens             Token[]
+  loginHistory       LoginHistory[]
+  auditLogs          AuditLog[]     @relation("AuditLogUser")
+  performedAuditLogs AuditLog[]     @relation("AuditLogPerformedBy")
+  requestLogs        RequestLog[]
+  activities         Activity[]
+
+  @@index([email])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("user")
+}
+
+// ==================== USER PROFILE MODEL (OTO) ====================
+
+model UserProfile {
+  id          String    @id @default(uuid()) @map("id")
+  userId      String    @unique @map("user_id")
+  firstName   String    @map("first_name")
+  lastName    String?   @map("last_name")
+  displayName String?   @map("display_name")
+  avatar      String?   @map("avatar")
+  bio         String?   @map("bio") @db.Text
+  phoneNumber String?   @unique @map("phone_number")
+  dateOfBirth DateTime? @map("date_of_birth")
+  gender      String?   @map("gender")
+  country     String?   @map("country")
+  state       String?   @map("state")
+  city        String?   @map("city")
+  address     String?   @map("address") @db.Text
+  postalCode  String?   @map("postal_code")
+  timezone    String?   @default("UTC") @map("timezone")
+  language    String?   @default("en") @map("language")
+  currency    String?   @default("USD") @map("currency")
+  website     String?   @map("website")
+  socialLinks Json?     @map("social_links") // Store social media links as JSON
+  preferences Json?     @map("preferences") // Store user preferences as JSON
+  metadata    Json?     @map("metadata") // Additional metadata
+  deletedAt   DateTime? @map("deleted_at") // Soft delete
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([phoneNumber])
+  @@index([deletedAt])
+  @@map("user_profile")
+}
+
+// ==================== TOKEN MODEL (For Revocation) ====================
+
+model Token {
+  id            String    @id @default(uuid()) @map("id")
+  userId        String    @map("user_id")
+  token         String    @unique @map("token") @db.VarChar(500)
+  tokenHash     String    @unique @map("token_hash") // Store hash of token for lookup
+  type          TokenType @map("type")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at") // For instant token invalidation
+  revokedReason String?   @map("revoked_reason")
+  deviceInfo    String?   @map("device_info") @db.Text
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  deletedAt     DateTime? @map("deleted_at") // Soft delete
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([type])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@index([deletedAt])
+  @@map("token")
+}
+
+// ==================== LOGIN HISTORY MODEL ====================
+
+model LoginHistory {
+  id              String    @id @default(uuid()) @map("id")
+  userId          String    @map("user_id")
+  loginAt         DateTime  @default(now()) @map("login_at")
+  logoutAt        DateTime? @map("logout_at")
+  ipAddress       String?   @map("ip_address")
+  userAgent       String?   @map("user_agent")
+  deviceType      String?   @map("device_type")
+  browser         String?   @map("browser")
+  os              String?   @map("os")
+  location        String?   @map("location")
+  latitude        Float?    @map("latitude")
+  longitude       Float?    @map("longitude")
+  isSuccessful    Boolean   @default(true) @map("is_successful")
+  failureReason   String?   @map("failure_reason")
+  sessionDuration Int?      @map("session_duration") // in seconds
+  deletedAt       DateTime? @map("deleted_at") // Soft delete
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, loginAt])
+  @@index([deletedAt])
+  @@map("login_history")
+}
+
+// ==================== AUDIT LOG MODEL ====================
+
+model AuditLog {
+  id            String      @id @default(uuid()) @map("id")
+  userId        String?     @map("user_id") // The user affected
+  performedById String?     @map("performed_by_id") // The user who performed the action
+  action        AuditAction @map("action")
+  entityType    String      @map("entity_type") // e.g., "User", "UserProfile", "Token"
+  entityId      String?     @map("entity_id") // ID of the affected entity
+  oldValues     Json?       @map("old_values") // Previous state
+  newValues     Json?       @map("new_values") // New state
+  changes       Json?       @map("changes") // Specific changes made
+  ipAddress     String?     @map("ip_address")
+  userAgent     String?     @map("user_agent")
+  requestId     String?     @map("request_id") // Link to request log
+  metadata      Json?       @map("metadata") // Additional context
+  deletedAt     DateTime?   @map("deleted_at") // Soft delete
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  user        User? @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  performedBy User? @relation("AuditLogPerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([performedById])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("audit_log")
+}
+
+// ==================== REQUEST LOG MODEL ====================
+
+model RequestLog {
+  id           String    @id @default(uuid()) @map("id")
+  requestId    String    @unique @map("request_id") // UUID for tracking
+  userId       String?   @map("user_id") // Null for unauthenticated requests
+  method       String    @map("method") // GET, POST, PUT, DELETE, etc.
+  path         String    @map("path")
+  query        Json?     @map("query") // Query parameters
+  body         Json?     @map("body") // Request body (sanitized)
+  headers      Json?     @map("headers") // Request headers (sanitized)
+  statusCode   Int?      @map("status_code")
+  responseTime Int?      @map("response_time") // in milliseconds
+  ipAddress    String?   @map("ip_address")
+  userAgent    String?   @map("user_agent")
+  errorMessage String?   @map("error_message") @db.Text
+  errorStack   String?   @map("error_stack") @db.Text
+  deletedAt    DateTime? @map("deleted_at") // Soft delete
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([requestId])
+  @@index([userId])
+  @@index([method])
+  @@index([path])
+  @@index([statusCode])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("request_log")
+}
+
+// ==================== ACTIVITY MODEL ====================
+model Activity {
+  id String @id @default(uuid()) @map("id")
+
+  type             String   @map("type") // "LABEL_ADDED", "STATUS_CHANGED"
+  entityType       String   @map("entity_type") // "ISSUE", "ORG"
+  entityId         String   @map("entity_id")
+  parentEntityType String?  @map("parent_entity_type") // for nested entities, e.g. "PROJECT" for an issue
+  parentEntityId   String?  @map("parent_entity_id")
+  actorId          String?  @map("actor_id") // who did it
+  contextType      String?  @map("context_type") // "PROJECT", "ORG"
+  contextId        String?  @map("context_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // UI-friendly payload
+  data Json @map("data") // { label: "bug" } or { from: "open", to: "closed" }
+
+  // Relations
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId, createdAt])
+  @@index([contextType, contextId, createdAt])
+  @@map("activity")
+}

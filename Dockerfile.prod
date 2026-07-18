@@ -1,0 +1,76 @@
+# ─────────────────────────────────────────────
+# Stage 1: base — node + corepack
+# ─────────────────────────────────────────────
+FROM node:22-alpine AS base
+
+WORKDIR /app
+RUN corepack enable && corepack prepare pnpm@10 --activate
+
+# ─────────────────────────────────────────────
+# Stage 2: install ALL deps (needed for build)
+# ─────────────────────────────────────────────
+FROM base AS deps
+
+ENV CI=true
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# ─────────────────────────────────────────────
+# Stage 3: build
+# ─────────────────────────────────────────────
+FROM deps AS build
+
+COPY nest-cli.json tsconfig.json tsconfig.build.json ./
+COPY prisma ./prisma
+
+# Generate prisma client before compiling TS
+RUN pnpm prisma generate
+
+COPY src ./src
+RUN pnpm run build
+
+# ─────────────────────────────────────────────
+# Stage 4: production deps only + generate client
+# prisma CLI is available here so we generate
+# into node_modules before copying to runner
+# ─────────────────────────────────────────────
+FROM base AS prod-deps
+
+ENV CI=true
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+
+COPY prisma ./prisma
+RUN pnpm prisma generate
+
+# ─────────────────────────────────────────────
+# Stage 5: final runner image
+# ─────────────────────────────────────────────
+FROM node:22-alpine AS runner
+
+# wget for healthcheck, dumb-init for proper SIGTERM handling
+RUN apk add --no-cache wget dumb-init
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Non-root user for security
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nestjs \
+  && mkdir -p /app/logs \
+  && chown -R nestjs:nodejs /app/logs
+
+# node_modules already has prisma client generated from prod-deps stage
+COPY --from=prod-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=build     --chown=nestjs:nodejs /app/dist         ./dist
+COPY --chown=nestjs:nodejs package.json ./
+COPY --chown=nestjs:nodejs prisma       ./prisma
+
+USER nestjs
+
+EXPOSE 3000
+
+# dumb-init ensures SIGTERM is forwarded correctly to the Node process
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/main.js"]

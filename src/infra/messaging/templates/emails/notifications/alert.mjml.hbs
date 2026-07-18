@@ -1,0 +1,7 @@
+{{#> base title="{{alertTitle}}" supportEmail="support@neurox.local" companyName="neurox"}}
+  <mj-text>{{alertMessage}}</mj-text>
+  {{#if actionLink}}
+    <mj-button href="{{actionLink}}" background-color="#1f6feb">View Details</mj-button>
+  {{/if}}
+  <mj-text color="#6b7280" font-size="14px">{{timestamp}}</mj-text>
+{{/base}}

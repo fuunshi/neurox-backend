@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { Observable, tap, catchError } from "rxjs";
 import { v4 as uuidv4 } from "uuid";
-import { AppLoggerService } from "../modules/logger/logger.service";
+import { AppLoggerService } from "@/infra/logger/logger.service";
 import { FastifyRequest, FastifyReply } from "fastify";
 
 export const REQUEST_ID_HEADER = "X-Request-ID";

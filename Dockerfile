@@ -10,9 +10,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 
+# No client-generation step: MikroORM entities are plain TypeScript under src/,
+# so they are compiled by the normal build.
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
-COPY prisma ./prisma
-RUN pnpm prisma generate
 COPY src ./src
 
 RUN pnpm run build
@@ -29,9 +29,6 @@ ENV NODE_ENV=production
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-COPY prisma ./prisma
-
-RUN pnpm prisma generate
 
 EXPOSE 3000
 

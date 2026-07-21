@@ -1,25 +1,21 @@
 // Config
-export * from "./modules/config";
-export * from "./modules/config/config.module";
+export * from "../infra/config";
+export * from "../infra/config/config.module";
 
 // Logger
-export * from "./modules/logger";
+export * from "../infra/logger";
 
 // Throttler
-export * from "./modules/throttler";
+export * from "../infra/throttler";
 
 // Queue
-export * from "./modules/queue";
-
-// Prisma
-export * from "./modules/prisma/prisma.module";
-export * from "./modules/prisma/prisma.service";
+export * from "../infra/queue";
 
 // Audit
-export * from "./modules/audit";
+export * from "../infra/audit";
 
 // Token
-export * from "./modules/token";
+export * from "../infra/token";
 
 // Interceptors
 export * from "./interceptors";
@@ -32,4 +28,3 @@ export * from "./guard";
 
 // Decorators
 export * from "./decorators/auth.decorator";
-export * from "./decorators/roles.decorator";

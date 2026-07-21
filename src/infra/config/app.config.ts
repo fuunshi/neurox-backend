@@ -7,6 +7,6 @@ export default registerAs("app", () => ({
   frontendBaseUrl: process.env.FRONTEND_URL,
   clientBaseUrl: process.env.CLIENT_URL,
   researcherBaseUrl: process.env.RESEARCHER_URL,
-  appName: process.env.APP_NAME || "neurox",
+  appName: process.env.APP_NAME || "Neurox",
   supportEmail: process.env.SUPPORT_EMAIL,
 }));

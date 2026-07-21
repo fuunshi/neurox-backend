@@ -6,7 +6,8 @@ import {
 } from "@nestjs/common";
 import { Observable, tap, catchError } from "rxjs";
 import { FastifyRequest, FastifyReply } from "fastify";
-import { PrismaService } from "../modules/prisma/prisma.service";
+import { EntityManager } from "@mikro-orm/postgresql";
+import { RequestLog, User } from "@/database/entities";
 
 interface RequestWithId extends FastifyRequest {
   requestId?: string;
@@ -15,7 +16,7 @@ interface RequestWithId extends FastifyRequest {
 
 @Injectable()
 export class RequestLogInterceptor implements NestInterceptor {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly em: EntityManager) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<RequestWithId>();
@@ -92,22 +93,25 @@ export class RequestLogInterceptor implements NestInterceptor {
     errorStack?: string;
   }): Promise<void> {
     try {
-      await this.prisma.requestLog.create({
-        data: {
-          requestId: data.requestId,
-          userId: data.userId,
-          method: data.method,
-          path: data.path,
-          query: data.query as any,
-          body: data.body as any,
-          statusCode: data.statusCode,
-          responseTime: data.responseTime,
-          ipAddress: data.ipAddress,
-          userAgent: data.userAgent,
-          errorMessage: data.errorMessage,
-          errorStack: data.errorStack,
-        },
+      this.em.create(RequestLog, {
+        requestId: data.requestId,
+        // `user` is the relation; the scalar `userId` property is gone.
+        user: data.userId ? this.em.getReference(User, data.userId) : null,
+        method: data.method,
+        path: data.path,
+        query: data.query ?? null,
+        body: data.body ?? null,
+        // MikroORM v7 requires JSON columns to be present in create data even
+        // when nullable and unused; the old Prisma call simply omitted it.
+        headers: null,
+        statusCode: data.statusCode,
+        responseTime: data.responseTime,
+        ipAddress: data.ipAddress,
+        userAgent: data.userAgent,
+        errorMessage: data.errorMessage,
+        errorStack: data.errorStack,
       });
+      await this.em.flush();
     } catch (error) {
       // Silently fail - don't let logging errors affect the request
       console.error("Failed to log request:", error);

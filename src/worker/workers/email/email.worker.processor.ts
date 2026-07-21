@@ -4,11 +4,11 @@ import { Job } from "bullmq";
 import {
   MAIL_QUEUE_EVENTS,
   MAIL_QUEUE_NAME,
-} from "@/common/modules/mail-queue/mail-queue.constants";
+} from "@/infra/mail-queue/mail-queue.constants";
 import {
   GenericEmailMessage,
   ResearcherCredentialsMessage,
-} from "@/common/modules/mail-queue/mail-queue.types";
+} from "@/infra/mail-queue/mail-queue.types";
 import { EmailSenderService } from "./email.sender.service";
 
 @Processor(MAIL_QUEUE_NAME)

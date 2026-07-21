@@ -1,8 +1,9 @@
-import { PrismaService } from "@/common";
+import { DB_TOKEN_TYPE, TokenType } from "@/common/constant/enums";
+import { Token, User } from "@/database/entities";
+import { EntityManager, FilterQuery } from "@mikro-orm/postgresql";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import { Prisma, TokenType } from "@prisma/client";
 import { createHmac } from "crypto";
 
 export interface CreateTokenData {
@@ -21,12 +22,16 @@ export class TokenService {
   private readonly hashSecret: string;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly em: EntityManager,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {
-    this.hashSecret =
-      this.configService.get<string>("auth.tokenHashSecret") || "secret_key";
+    // Required, not defaulted. A silent fallback here means every token hash is
+    // computed with a publicly-known key, and because `verifyToken` returns
+    // true when no row matches, revocation would quietly stop working.
+    this.hashSecret = this.configService.getOrThrow<string>(
+      "auth.tokenHashSecret",
+    );
   }
 
   /**
@@ -42,18 +47,18 @@ export class TokenService {
   async storeToken(data: CreateTokenData): Promise<void> {
     const tokenHash = this.hashToken(data.token);
 
-    await this.prisma.token.create({
-      data: {
-        userId: data.userId,
-        token: data.token,
-        tokenHash,
-        type: data.type,
-        expiresAt: data.expiresAt,
-        deviceInfo: data.deviceInfo,
-        ipAddress: data.ipAddress,
-        userAgent: data.userAgent,
-      },
+    this.em.create(Token, {
+      user: this.em.getReference(User, data.userId),
+      token: data.token,
+      tokenHash,
+      type: data.type,
+      expiresAt: data.expiresAt,
+      deviceInfo: data.deviceInfo,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
     });
+
+    await this.em.flush();
   }
 
   /**
@@ -62,8 +67,9 @@ export class TokenService {
   async verifyToken(token: string, tokenType: TokenType): Promise<boolean> {
     const tokenHash = this.hashToken(token);
 
-    const storedToken = await this.prisma.token.findUnique({
-      where: { tokenHash, type: tokenType },
+    const storedToken = await this.em.findOne(Token, {
+      tokenHash,
+      type: tokenType,
     });
 
     if (!storedToken) {
@@ -84,7 +90,10 @@ export class TokenService {
   }
 
   /**
-   * Revoke a specific token
+   * Revoke a specific token.
+   *
+   * Pass `tx` when calling inside `em.transactional()` so the revocation joins
+   * that transaction and rolls back with it.
    */
   async revokeToken({
     token,
@@ -95,21 +104,22 @@ export class TokenService {
     token: string;
     reason?: string;
     performedById?: string;
-    tx?: Prisma.TransactionClient;
+    tx?: EntityManager;
   }): Promise<void> {
-    const prismaClient = tx || this.prisma;
+    const em = tx ?? this.em;
     const tokenHash = this.hashToken(token);
 
-    await prismaClient.token.updateMany({
-      where: {
+    await em.nativeUpdate(
+      Token,
+      {
         tokenHash,
         revokedAt: null,
       },
-      data: {
+      {
         revokedAt: new Date(),
         revokedReason: reason,
       },
-    });
+    );
 
     this.logger.log(`Token revoked. Reason: ${reason || "No reason provided"}`);
   }
@@ -122,28 +132,25 @@ export class TokenService {
     reason?: string,
     excludeTokenHash?: string,
   ): Promise<number> {
-    const where: Prisma.TokenWhereInput = {
-      userId,
+    const where: FilterQuery<Token> = {
+      user: userId,
       revokedAt: null,
     };
 
     if (excludeTokenHash) {
-      where.tokenHash = { not: excludeTokenHash };
+      where.tokenHash = { $ne: excludeTokenHash };
     }
 
-    const result = await this.prisma.token.updateMany({
-      where,
-      data: {
-        revokedAt: new Date(),
-        revokedReason: reason || "All tokens revoked",
-      },
+    const count = await this.em.nativeUpdate(Token, where, {
+      revokedAt: new Date(),
+      revokedReason: reason || "All tokens revoked",
     });
 
     this.logger.log(
-      `Revoked ${result.count} tokens for user ${userId}. Reason: ${reason || "All tokens revoked"}`,
+      `Revoked ${count} tokens for user ${userId}. Reason: ${reason || "All tokens revoked"}`,
     );
 
-    return result.count;
+    return count;
   }
 
   /**
@@ -153,29 +160,30 @@ export class TokenService {
     userId: string,
     reason?: string,
   ): Promise<number> {
-    const result = await this.prisma.token.updateMany({
-      where: {
-        userId,
-        type: TokenType.REFRESH,
+    const count = await this.em.nativeUpdate(
+      Token,
+      {
+        user: userId,
+        type: DB_TOKEN_TYPE.REFRESH,
         revokedAt: null,
       },
-      data: {
+      {
         revokedAt: new Date(),
         revokedReason: reason || "Refresh tokens revoked",
       },
-    });
+    );
 
-    return result.count;
+    return count;
   }
 
   /**
    * Get active tokens for a user
    */
   async getActiveTokens(userId: string, type?: TokenType) {
-    const where: Prisma.TokenWhereInput = {
-      userId,
+    const where: FilterQuery<Token> = {
+      user: userId,
       revokedAt: null,
-      expiresAt: { gt: new Date() },
+      expiresAt: { $gt: new Date() },
       deletedAt: null,
     };
 
@@ -183,17 +191,16 @@ export class TokenService {
       where.type = type;
     }
 
-    return this.prisma.token.findMany({
-      where,
-      select: {
-        id: true,
-        type: true,
-        deviceInfo: true,
-        ipAddress: true,
-        userAgent: true,
-        createdAt: true,
-        expiresAt: true,
-      },
+    return this.em.find(Token, where, {
+      fields: [
+        "id",
+        "type",
+        "deviceInfo",
+        "ipAddress",
+        "userAgent",
+        "createdAt",
+        "expiresAt",
+      ],
       orderBy: { createdAt: "desc" },
     });
   }
@@ -202,18 +209,19 @@ export class TokenService {
    * Clean up expired tokens
    */
   async cleanupExpiredTokens(): Promise<number> {
-    const result = await this.prisma.token.updateMany({
-      where: {
-        expiresAt: { lt: new Date() },
+    const count = await this.em.nativeUpdate(
+      Token,
+      {
+        expiresAt: { $lt: new Date() },
         deletedAt: null,
       },
-      data: {
+      {
         deletedAt: new Date(),
       },
-    });
+    );
 
-    this.logger.log(`Cleaned up ${result.count} expired tokens`);
-    return result.count;
+    this.logger.log(`Cleaned up ${count} expired tokens`);
+    return count;
   }
 
   /**

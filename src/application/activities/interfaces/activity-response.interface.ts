@@ -1,6 +1,6 @@
 import { EntityType } from "@/common/constant";
+import { Activity } from "@/database/entities";
 import { ContextType } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
 
 export interface ActivityObject {
   id: string;
@@ -21,7 +21,7 @@ export interface ActivityObject {
   contextType: string | null;
   contextId: string | null;
 
-  data: Prisma.JsonValue;
+  data: Activity["data"];
   createdAt: Date;
 }
 
@@ -42,6 +42,6 @@ export interface ActivityResponse {
   contextType: ContextType;
   contextId: string | null;
 
-  data: Prisma.JsonValue;
+  data: Activity["data"];
   createdAt: Date;
 }

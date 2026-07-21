@@ -1,10 +1,14 @@
-import { PrismaService } from "@/common";
+import { AccountLifecycleService } from "@/application/account/account-lifecycle.service";
 import { ACTIVITY_TYPES, CONTEXT_TYPES, ENTITY_TYPES } from "@/common/constant";
-import { AuditService } from "@/common/modules/audit/audit.service";
-import { EMAIL_TEMPLATES, MailQueueService } from "@/common/modules/mail-queue";
-import { TokenService } from "@/common/modules/token/token.service";
+import { ACCOUNT_ERROR_CODES } from "@/common/constant/account.constant";
+import { AUDIT_ACTION, DB_TOKEN_TYPE } from "@/common/constant/enums";
+import { AuditService } from "@/infra/audit/audit.service";
+import { EMAIL_TEMPLATES, MailQueueService } from "@/infra/mail-queue";
+import { TokenService } from "@/infra/token/token.service";
 import { handleError } from "@/common/utils/error/handler/generic.handler";
 import { getTokenExpiry } from "@/common/utils/token/get-token-expiry.util";
+import { User, UserProfile } from "@/database/entities";
+import { EntityManager } from "@mikro-orm/postgresql";
 import {
   BadRequestException,
   ConflictException,
@@ -15,16 +19,10 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtSignOptions } from "@nestjs/jwt";
-import {
-  AuditAction,
-  TokenType,
-  UserProfile,
-} from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import * as crypto from "crypto";
 import { RegisterDTO, RegisterResponseDTO } from "./dto/register.dto";
 import { UpdateUserProfileDTO } from "./dto/update-user-profile.dto";
-import { UserRepository } from "./user.repository";
 
 @Injectable()
 export class UserService {
@@ -32,12 +30,12 @@ export class UserService {
   private readonly emailVerificationTokenTimer: JwtSignOptions["expiresIn"];
   private readonly frontendUrl: string;
   constructor(
-    private readonly userRepository: UserRepository,
     private readonly auditService: AuditService,
-    private readonly prisma: PrismaService,
+    private readonly em: EntityManager,
     private readonly configService: ConfigService,
     private readonly tokenService: TokenService,
     private readonly mailQueueService: MailQueueService,
+    private readonly accountLifecycle: AccountLifecycleService,
   ) {
     this.emailVerificationTokenTimer = this.configService.getOrThrow<
       JwtSignOptions["expiresIn"]
@@ -53,26 +51,42 @@ export class UserService {
    * Handles user registration and returns user information.
    */
   async register(registerDTO: RegisterDTO): Promise<RegisterResponseDTO> {
-    // Check if the email already exists
-    const existingUser = await this.userRepository.findByEmail(
-      registerDTO.email,
+    // Check if the email already exists. The global soft-delete filter means
+    // this deliberately does not match soft-deleted accounts.
+    const existingUser = await this.em.findOne(
+      User,
+      { email: registerDTO.email },
+      { populate: ["profile"] },
     );
 
     if (existingUser) {
       throw new ConflictException("Email already in use.");
     }
 
+    // No active account holds this address. If a soft-deleted one does and is
+    // still inside its grace period, offer recovery instead of leaving the
+    // caller at a dead end -- the address is not actually available yet.
+    const recoverableUntil = await this.accountLifecycle.recoveryDeadline(
+      registerDTO.email,
+    );
+
+    if (recoverableUntil) {
+      throw new ConflictException({
+        message:
+          "An account with this email was recently deleted and can still be recovered.",
+        code: ACCOUNT_ERROR_CODES.ACCOUNT_RECOVERABLE,
+        recoverableUntil: recoverableUntil.toISOString(),
+      });
+    }
+
     const username = registerDTO.username.toLowerCase();
 
     // Check if the username already exists
-    const existingUsername = await this.prisma.user.findUnique({
-      where: {
-        username,
-      },
-      select: {
-        id: true,
-      },
-    });
+    const existingUsername = await this.em.findOne(
+      User,
+      { username },
+      { fields: ["id"] },
+    );
 
     if (existingUsername) {
       throw new ConflictException("Username already in use.");
@@ -80,8 +94,10 @@ export class UserService {
 
     // Check if phone number already exists (if provided)
     if (registerDTO.phoneNumber) {
-      const existingPhone = await this.userRepository.findByPhoneNumber(
-        registerDTO.phoneNumber,
+      const existingPhone = await this.em.findOne(
+        User,
+        { profile: { phoneNumber: registerDTO.phoneNumber } },
+        { populate: ["profile"] },
       );
 
       if (existingPhone) {
@@ -91,50 +107,51 @@ export class UserService {
 
     const hashedPassword = await bcrypt.hash(registerDTO.password, 10);
 
-    const user = await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          email: registerDTO.email,
-          username: username,
-          password: hashedPassword,
-          profile: {
-            create: {
-              firstName: registerDTO.firstName,
-              lastName: registerDTO.lastName,
-              phoneNumber: registerDTO.phoneNumber,
-            },
-          },
-        },
-        include: {
-          profile: true,
-        },
+    const user = await this.em.transactional(async (tx) => {
+      // MikroORM has no nested writes, so the profile is created alongside the
+      // user and linked through the owning side (`UserProfile.user`).
+      const created = tx.create(User, {
+        email: registerDTO.email,
+        username,
+        password: hashedPassword,
       });
-      // Handle user creation failure
-      if (!user) {
-        this.logger.error("Error during user creation in service.");
-        throw new InternalServerErrorException(
-          "Error during user creation in service.",
-        );
-      }
+
+      const profile = tx.create(UserProfile, {
+        firstName: registerDTO.firstName,
+        lastName: registerDTO.lastName ?? null,
+        phoneNumber: registerDTO.phoneNumber ?? null,
+        user: created,
+      });
+      created.profile = profile;
+
+      await tx.flush();
 
       await this.auditService.log(
         {
-          userId: user.id,
-          performedById: user.id, // Self-registration
-          action: AuditAction.CREATE,
+          userId: created.id,
+          performedById: created.id, // Self-registration
+          action: AUDIT_ACTION.CREATE,
           entityType: "User",
-          entityId: user.id,
+          entityId: created.id,
           newValues: {
-            email: user.email,
-            role: user.role,
-            status: user.status,
+            email: created.email,
+            role: created.role,
+            status: created.status,
           },
         },
         tx,
       );
+      await tx.flush();
 
-      return user;
+      return created;
     });
+
+    if (!user) {
+      this.logger.error("Error during user creation in service.");
+      throw new InternalServerErrorException(
+        "Error during user creation in service.",
+      );
+    }
 
     // Generate verification token
     const verificationToken = crypto.randomBytes(32).toString("hex");
@@ -144,7 +161,7 @@ export class UserService {
     await this.tokenService.storeToken({
       userId: user.id,
       token: verificationToken,
-      type: TokenType.EMAIL_VERIFICATION,
+      type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
       expiresAt,
     });
 
@@ -162,30 +179,30 @@ export class UserService {
   }
 
   async metadata(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        status: true,
-        isActive: true,
-        forcePasswordChange: true,
-        lastLoginAt: true,
-        profile: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phoneNumber: true,
-            country: true,
-            city: true,
-            timezone: true,
-            language: true,
-            currency: true,
-          },
-        },
+    const user = await this.em.findOne(
+      User,
+      { id: userId },
+      {
+        populate: ["profile"],
+        fields: [
+          "id",
+          "email",
+          "role",
+          "status",
+          "isActive",
+          "forcePasswordChange",
+          "lastLoginAt",
+          "profile.firstName",
+          "profile.lastName",
+          "profile.phoneNumber",
+          "profile.country",
+          "profile.city",
+          "profile.timezone",
+          "profile.language",
+          "profile.currency",
+        ],
       },
-    });
+    );
     if (!user) {
       throw new BadRequestException("User not found.");
     }
@@ -225,53 +242,57 @@ export class UserService {
     userId: string,
     data: UpdateUserProfileDTO,
   ): Promise<UserProfile> {
-    return this.prisma.userProfile.upsert({
-      where: {
-        userId,
-      },
-      create: {
-        userId,
-        ...data,
-      },
-      update: {
-        ...data,
-      },
+    const existing = await this.em.findOne(UserProfile, { user: userId });
+
+    if (existing) {
+      this.em.assign(existing, data);
+      await this.em.flush();
+      return existing;
+    }
+
+    const profile = this.em.create(UserProfile, {
+      user: this.em.getReference(User, userId),
+      ...data,
     });
+    await this.em.flush();
+    return profile;
   }
 
   async getUserDetails(userId: string): Promise<any> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        status: true,
-        isActive: true,
-        profile: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phoneNumber: true,
-            displayName: true,
-            state: true,
-            address: true,
-            postalCode: true,
-            country: true,
-            city: true,
-            timezone: true,
-            language: true,
-            currency: true,
-            avatar: true,
-            bio: true,
-            dateOfBirth: true,
-            website: true,
-            socialLinks: true,
-            preferences: true,
-          },
-        },
+    const user = await this.em.findOne(
+      User,
+      { id: userId },
+      {
+        populate: ["profile"],
+        // Explicit field list, as the Prisma `select` did: returning the whole
+        // entity would leak `password` and every other column.
+        fields: [
+          "id",
+          "email",
+          "role",
+          "status",
+          "isActive",
+          "profile.firstName",
+          "profile.lastName",
+          "profile.phoneNumber",
+          "profile.displayName",
+          "profile.state",
+          "profile.address",
+          "profile.postalCode",
+          "profile.country",
+          "profile.city",
+          "profile.timezone",
+          "profile.language",
+          "profile.currency",
+          "profile.avatar",
+          "profile.bio",
+          "profile.dateOfBirth",
+          "profile.website",
+          "profile.socialLinks",
+          "profile.preferences",
+        ],
       },
-    });
+    );
 
     if (!user) {
       throw new NotFoundException("User not found.");

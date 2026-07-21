@@ -1,18 +1,19 @@
-import { AuditModule } from "@/common/modules/audit/audit.module";
-import { ConfigModule } from "@/common/modules/config/config.module";
-import { LoggerModule } from "@/common/modules/logger/logger.module";
-import { MailQueueModule } from "@/common/modules/mail-queue/mail-queue.module";
-import { PrismaModule } from "@/common/modules/prisma/prisma.module";
-import { QueueModule } from "@/common/modules/queue/queue.module";
-import { ThrottlerModule } from "@/common/modules/throttler/throttler.module";
-import { TokenModule } from "@/common/modules/token/token.module";
+import { AuditModule } from "@/infra/audit/audit.module";
+import { ConfigModule } from "@/infra/config/config.module";
+import { LoggerModule } from "@/infra/logger/logger.module";
+import { MailQueueModule } from "@/infra/mail-queue/mail-queue.module";
+import { QueueModule } from "@/infra/queue/queue.module";
+import { SettingsModule } from "@/infra/settings/settings.module";
+import { ThrottlerModule } from "@/infra/throttler/throttler.module";
+import { TokenModule } from "@/infra/token/token.module";
+import { DatabaseModule } from "@/database/database.module";
 import { Module } from "@nestjs/common";
 
 /**
  * Infrastructure Module
  * Aggregates all infrastructure-related modules including:
  * - Configuration
- * - Database (Prisma)
+ * - Database (MikroORM)
  * - Cache (Redis)
  * - Messaging (Mail Queue, Bull MQ)
  * - Audit logging
@@ -21,27 +22,29 @@ import { Module } from "@nestjs/common";
  * - Rate limiting (Throttler)
  */
 @Module({
-    imports: [
-        ConfigModule,
-        PrismaModule,
-        // RedisModule,
-        AuditModule,
-        LoggerModule,
-        MailQueueModule,
-        QueueModule,
-        ThrottlerModule,
-        TokenModule,
-    ],
-    exports: [
-        ConfigModule,
-        PrismaModule,
-        // RedisModule,
-        AuditModule,
-        LoggerModule,
-        MailQueueModule,
-        QueueModule,
-        ThrottlerModule,
-        TokenModule,
-    ],
+  imports: [
+    ConfigModule,
+    DatabaseModule,
+    // RedisModule,
+    AuditModule,
+    LoggerModule,
+    MailQueueModule,
+    QueueModule,
+    SettingsModule,
+    ThrottlerModule,
+    TokenModule,
+  ],
+  exports: [
+    ConfigModule,
+    DatabaseModule,
+    // RedisModule,
+    AuditModule,
+    LoggerModule,
+    MailQueueModule,
+    QueueModule,
+    SettingsModule,
+    ThrottlerModule,
+    TokenModule,
+  ],
 })
-export class InfraModule { }
+export class InfraModule {}

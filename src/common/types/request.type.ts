@@ -1,6 +1,6 @@
 import { FastifyRequest } from "fastify";
 
-import { Role } from "@prisma/client";
+import { Role } from "@/common/constant/enums";
 import { JwtTokenType, TokenPurpose } from "./token.type";
 
 // ─────────────────────────────────────────────
@@ -21,7 +21,6 @@ export type RequestTokenType = {
 // ─────────────────────────────────────────────
 // Context Fragments
 // ─────────────────────────────────────────────
-
 
 // ─────────────────────────────────────────────
 // Base Auth Context (after AuthGuard)

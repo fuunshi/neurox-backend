@@ -10,7 +10,6 @@ import { GlobalExceptionFilter } from "./common/filter/global-exception.filter";
 import { RequestIdInterceptor } from "./common/interceptors/request-id.interceptor";
 import { RequestLogInterceptor } from "./common/interceptors/request-log.interceptor";
 import { ResponseInterceptor } from "./common/interceptors/response.interceptor";
-import { CoreModule } from "./core/core.module";
 import { ApiModule } from "./api/api.module";
 import { ApplicationModule } from "./application/application.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
@@ -34,7 +33,6 @@ import { InfraModule } from "./infra/infra.module";
         },
       }),
     }),
-    CoreModule,
   ],
   controllers: [AppController],
   providers: [

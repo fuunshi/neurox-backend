@@ -1,6 +1,7 @@
-import { PrismaService } from "@/common";
 import { Injectable, Logger } from "@nestjs/common";
-import { AuditAction, Prisma } from "@prisma/client";
+import { EntityManager, FilterQuery } from "@mikro-orm/postgresql";
+import { AuditAction } from "@/common/constant/enums";
+import { AuditLog, User } from "@/database/entities";
 
 export interface AuditLogData {
   userId?: string;
@@ -21,30 +22,38 @@ export interface AuditLogData {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly em: EntityManager) {}
 
   /**
-   * Create an audit log entry
+   * Create an audit log entry.
+   *
+   * Pass `tx` when calling inside `em.transactional()`: the row is then created
+   * on that transactional EntityManager and persisted by the caller's commit,
+   * rather than being flushed independently.
    */
-  async log(data: AuditLogData, tx?: Prisma.TransactionClient): Promise<void> {
+  async log(data: AuditLogData, tx?: EntityManager): Promise<void> {
     try {
-      const prisma = tx || this.prisma;
-      await prisma.auditLog.create({
-        data: {
-          userId: data.userId,
-          performedById: data.performedById,
-          action: data.action,
-          entityType: data.entityType,
-          entityId: data.entityId,
-          oldValues: data.oldValues as any,
-          newValues: data.newValues as any,
-          changes: data.changes as any,
-          ipAddress: data.ipAddress,
-          userAgent: data.userAgent,
-          requestId: data.requestId,
-          metadata: data.metadata as any,
-        },
+      const em = tx ?? this.em;
+      em.create(AuditLog, {
+        user: data.userId ? em.getReference(User, data.userId) : null,
+        performedBy: data.performedById
+          ? em.getReference(User, data.performedById)
+          : null,
+        action: data.action,
+        entityType: data.entityType,
+        entityId: data.entityId ?? null,
+        oldValues: data.oldValues ?? null,
+        newValues: data.newValues ?? null,
+        changes: data.changes ?? null,
+        ipAddress: data.ipAddress ?? null,
+        userAgent: data.userAgent ?? null,
+        requestId: data.requestId ?? null,
+        metadata: data.metadata ?? null,
       });
+
+      if (!tx) {
+        await em.flush();
+      }
     } catch (error) {
       this.logger.error(`Failed to create audit log: ${error}`);
     }
@@ -108,10 +117,12 @@ export class AuditService {
   ) {
     const page = options?.page || 1;
     const limit = options?.limit || 20;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const where: Prisma.AuditLogWhereInput = {
-      OR: [{ userId }, { performedById: userId }],
+    // `deletedAt: null` is kept explicit rather than relying solely on the
+    // global soft-delete filter, so this behaves identically either way.
+    const where: FilterQuery<AuditLog> = {
+      $or: [{ user: userId }, { performedBy: userId }],
       deletedAt: null,
     };
 
@@ -120,13 +131,12 @@ export class AuditService {
     }
 
     const [logs, total] = await Promise.all([
-      this.prisma.auditLog.findMany({
-        where,
+      this.em.find(AuditLog, where, {
         orderBy: { createdAt: "desc" },
-        skip,
-        take: limit,
+        offset,
+        limit,
       }),
-      this.prisma.auditLog.count({ where }),
+      this.em.count(AuditLog, where),
     ]);
 
     return {

@@ -1,4 +1,6 @@
 {
   "extends": "./tsconfig.json",
+  // `exclude` REPLACES the base config's list rather than merging, so this
+  // repeats the base exclusions instead of relying on inheritance.
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }

@@ -20,28 +20,20 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 # ─────────────────────────────────────────────
 FROM deps AS build
 
+# No client-generation step: MikroORM entities are plain TypeScript under src/,
+# so they are compiled by the normal build.
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
-COPY prisma ./prisma
-
-# Generate prisma client before compiling TS
-RUN pnpm prisma generate
-
 COPY src ./src
 RUN pnpm run build
 
 # ─────────────────────────────────────────────
-# Stage 4: production deps only + generate client
-# prisma CLI is available here so we generate
-# into node_modules before copying to runner
+# Stage 4: production deps only
 # ─────────────────────────────────────────────
 FROM base AS prod-deps
 
 ENV CI=true
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
-
-COPY prisma ./prisma
-RUN pnpm prisma generate
 
 # ─────────────────────────────────────────────
 # Stage 5: final runner image
@@ -61,11 +53,9 @@ RUN addgroup --system --gid 1001 nodejs \
   && mkdir -p /app/logs \
   && chown -R nestjs:nodejs /app/logs
 
-# node_modules already has prisma client generated from prod-deps stage
 COPY --from=prod-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=build     --chown=nestjs:nodejs /app/dist         ./dist
 COPY --chown=nestjs:nodejs package.json ./
-COPY --chown=nestjs:nodejs prisma       ./prisma
 
 USER nestjs
 

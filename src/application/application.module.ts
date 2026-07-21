@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AccountApplicationModule } from "./account/account.module";
 import { ActivitiesApplicationModule } from "./activities/activities.module";
 import { AuthApplicationModule } from "./auth/auth.module";
 import { UserApplicationModule } from "./user/user.module";
@@ -10,15 +11,17 @@ import { UserApplicationModule } from "./user/user.module";
  * Dependencies are injected from infrastructure layer
  */
 @Module({
-    imports: [
-        AuthApplicationModule,
-        UserApplicationModule,
-        ActivitiesApplicationModule,
-    ],
-    exports: [
-        AuthApplicationModule,
-        UserApplicationModule,
-        ActivitiesApplicationModule,
-    ],
+  imports: [
+    AuthApplicationModule,
+    UserApplicationModule,
+    ActivitiesApplicationModule,
+    AccountApplicationModule,
+  ],
+  exports: [
+    AuthApplicationModule,
+    UserApplicationModule,
+    ActivitiesApplicationModule,
+    AccountApplicationModule,
+  ],
 })
-export class ApplicationModule { }
+export class ApplicationModule {}

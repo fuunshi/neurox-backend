@@ -1,6 +1,6 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { User, UserProfile } from "@prisma/client";
+import { User, UserProfile } from "@/database/entities";
 import {
   IsEmail,
   IsNotEmpty,
@@ -72,7 +72,7 @@ export class RegisterDTO {
   phoneNumber?: string;
 }
 
-export type UserWithProfile = User & { profile: UserProfile | null };
+import type { UserWithProfile } from "@/application/user/user.type";
 
 export class RegisterResponseDTO {
   @ApiProperty({ example: "1234567890", description: "User ID" })

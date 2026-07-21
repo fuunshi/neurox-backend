@@ -9,10 +9,6 @@ import { UserApiModule } from "./user-api/user-api.module";
  * Controllers are kept thin and delegate to application services
  */
 @Module({
-  imports: [
-    AuthApiModule,
-    UserApiModule,
-    ActivitiesApiModule,
-  ],
+  imports: [AuthApiModule, UserApiModule, ActivitiesApiModule],
 })
-export class ApiModule { }
+export class ApiModule {}

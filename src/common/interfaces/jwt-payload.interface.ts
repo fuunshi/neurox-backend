@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { Role } from "@/common/constant/enums";
 import { JwtTokenType, TokenPurpose } from "../types/token.type";
 
 export interface JwtPayload {

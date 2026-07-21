@@ -1,19 +1,31 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { Prisma } from "@prisma/client";
 import { IsEnum, IsOptional } from "class-validator";
+
+/**
+ * The sort orders MikroORM accepts for `orderBy`, replacing Prisma's
+ * `SortOrder`. Kept to the two lowercase values so `@IsEnum` still rejects
+ * anything else (MikroORM's own `QueryOrder` also allows the uppercase and
+ * `NULLS FIRST/LAST` variants).
+ */
+const SORT_ORDER = {
+  asc: "asc",
+  desc: "desc",
+} as const;
+
+type SortOrder = (typeof SORT_ORDER)[keyof typeof SORT_ORDER];
 
 export class OrderQueryDTO {
   @ApiPropertyOptional({
     example: "asc",
     description: "Ascending Or Descending Order",
-    enum: Prisma.SortOrder,
-    default: Prisma.SortOrder.desc,
+    enum: SORT_ORDER,
+    default: SORT_ORDER.desc,
   })
-  @IsEnum(Prisma.SortOrder)
+  @IsEnum(SORT_ORDER)
   @IsOptional()
-  order!: Prisma.SortOrder;
+  order!: SortOrder;
 
-  constructor(order: Prisma.SortOrder = Prisma.SortOrder.desc) {
+  constructor(order: SortOrder = SORT_ORDER.desc) {
     this.order = order;
   }
 }

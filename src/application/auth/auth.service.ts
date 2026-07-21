@@ -1,8 +1,8 @@
-import { PrismaService } from "@/common";
+import { AUDIT_ACTION, DB_TOKEN_TYPE, Role } from "@/common/constant/enums";
 import { JwtPayload } from "@/common/interfaces/jwt-payload.interface";
-import { AuditService } from "@/common/modules/audit/audit.service";
-import { EMAIL_TEMPLATES, MailQueueService } from "@/common/modules/mail-queue";
-import { TokenService } from "@/common/modules/token/token.service";
+import { AuditService } from "@/infra/audit/audit.service";
+import { EMAIL_TEMPLATES, MailQueueService } from "@/infra/mail-queue";
+import { TokenService } from "@/infra/token/token.service";
 import { RequestTokenType } from "@/common/types/request.type";
 import {
   JwtTokenType,
@@ -11,6 +11,7 @@ import {
   TokenPurpose,
 } from "@/common/types/token.type";
 import { getTokenExpiry } from "@/common/utils/token/get-token-expiry.util";
+import { AuditLog, LoginHistory, Token, User } from "@/database/entities";
 import {
   BadRequestException,
   Injectable,
@@ -19,12 +20,12 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService, JwtSignOptions } from "@nestjs/jwt";
-import { AuditAction, Role, TokenType } from "@prisma/client";
+import { EntityManager } from "@mikro-orm/postgresql";
 import * as bcrypt from "bcryptjs";
 import crypto from "crypto";
 import QRCode from "qrcode";
 import * as speakeasy from "speakeasy";
-import { UserRepository, UserWithProfile } from "../user/user.repository";
+import { UserWithProfile } from "../user/user.type";
 import { ForgotPasswordDTO } from "./dto/forgot-password.dto";
 import {
   AuthLoginResponseDTO,
@@ -48,12 +49,11 @@ export class AuthService {
   private readonly appName: string;
 
   constructor(
-    private readonly userRepository: UserRepository,
     private readonly jwtService: JwtService,
     private readonly tokenService: TokenService,
     private readonly auditService: AuditService,
     private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly em: EntityManager,
     private readonly mailQueueService: MailQueueService,
   ) {
     this.resetTokenExpiresIn = this.configService.getOrThrow<
@@ -176,12 +176,11 @@ export class AuthService {
       throw new BadRequestException("Failed to generate otpauth URL");
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        twoFactorSecret: secret.base32,
-      },
+    const user = await this.em.findOneOrFail(User, { id: userId });
+    this.em.assign(user, {
+      twoFactorSecret: secret.base32,
     });
+    await this.em.flush();
 
     const qrCodeDataUrl = await QRCode.toDataURL(secret.otpauth_url);
     return {
@@ -214,10 +213,11 @@ export class AuthService {
       }
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { twoFactorSecret: true, twoFactorEnabled: true },
-    });
+    const user = await this.em.findOne(
+      User,
+      { id: userId },
+      { fields: ["twoFactorSecret", "twoFactorEnabled"] },
+    );
 
     if (user?.twoFactorEnabled) {
       throw new BadRequestException("MFA is already enabled for this user");
@@ -232,13 +232,15 @@ export class AuthService {
       throw new UnauthorizedException("Invalid MFA code");
     }
 
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        twoFactorEnabled: true,
-      },
-      include: { profile: true },
+    const updatedUser = await this.em.findOneOrFail(
+      User,
+      { id: userId },
+      { populate: ["profile"] },
+    );
+    this.em.assign(updatedUser, {
+      twoFactorEnabled: true,
     });
+    await this.em.flush();
 
     if (token.type === TOKEN_TYPE.ACCESS) {
       return {
@@ -256,10 +258,11 @@ export class AuthService {
    * @returns A message indicating MFA has been disabled if successful. Otherwise, throws an appropriate error.
    */
   async disableMfa(userId: string, dto: MFADTO): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { twoFactorSecret: true, twoFactorEnabled: true },
-    });
+    const user = await this.em.findOne(
+      User,
+      { id: userId },
+      { fields: ["twoFactorSecret", "twoFactorEnabled"] },
+    );
     if (!user?.twoFactorEnabled) {
       throw new BadRequestException("MFA is not enabled for this user");
     }
@@ -271,12 +274,11 @@ export class AuthService {
       throw new UnauthorizedException("Invalid MFA code");
     }
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        twoFactorEnabled: false,
-      },
+    const userToUpdate = await this.em.findOneOrFail(User, { id: userId });
+    this.em.assign(userToUpdate, {
+      twoFactorEnabled: false,
     });
+    await this.em.flush();
 
     await this.revokeAllTokens(
       userId,
@@ -310,10 +312,11 @@ export class AuthService {
       throw new UnauthorizedException("Invalid MFA verification request");
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { profile: true },
-    });
+    const user = await this.em.findOne(
+      User,
+      { id: userId },
+      { populate: ["profile"] },
+    );
 
     if (!user?.twoFactorSecret) {
       throw new UnauthorizedException(
@@ -340,20 +343,21 @@ export class AuthService {
     // Revoke all tokens for this user
     await this.tokenService.revokeAllUserTokens(userId, "User logout");
 
-    await this.prisma.loginHistory.updateMany({
-      where: {
-        userId,
+    await this.em.nativeUpdate(
+      LoginHistory,
+      {
+        user: userId,
         userAgent,
         logoutAt: null,
       },
-      data: { logoutAt: new Date() },
-    });
+      { logoutAt: new Date() },
+    );
 
     // Audit log
     await this.auditService.log({
       userId,
       performedById: userId,
-      action: AuditAction.LOGOUT,
+      action: AUDIT_ACTION.LOGOUT,
       entityType: "User",
       entityId: userId,
       userAgent,
@@ -380,8 +384,8 @@ export class AuthService {
     ipAddress: string,
     userAgent: string = "undefined",
   ): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: forgotPasswordDTO.email },
+    const user = await this.em.findOne(User, {
+      email: forgotPasswordDTO.email,
     });
 
     const rawToken = crypto.randomBytes(32).toString("hex");
@@ -390,7 +394,7 @@ export class AuthService {
       await this.tokenService.storeToken({
         userId: user.id,
         token: rawToken,
-        type: TokenType.PASSWORD_RESET,
+        type: DB_TOKEN_TYPE.PASSWORD_RESET,
         expiresAt,
         ipAddress,
         userAgent,
@@ -427,19 +431,14 @@ export class AuthService {
     resetPasswordDTO: ResetPasswordDTO,
   ): Promise<{ message: string }> {
     const hashToken = this.tokenService.hashToken(resetPasswordDTO.token);
-    const token = await this.prisma.$transaction(async (tx) => {
-      return await tx.token.findUnique({
-        where: { tokenHash: hashToken, type: TokenType.PASSWORD_RESET },
-        select: {
-          revokedAt: true,
-          expiresAt: true,
-          user: {
-            select: {
-              id: true,
-            },
-          },
+    const token = await this.em.transactional(async (tx) => {
+      return await tx.findOne(
+        Token,
+        { tokenHash: hashToken, type: DB_TOKEN_TYPE.PASSWORD_RESET },
+        {
+          fields: ["revokedAt", "expiresAt", "user.id"],
         },
-      });
+      );
     });
     if (!token) {
       throw new UnauthorizedException("Invalid or expired token");
@@ -451,14 +450,13 @@ export class AuthService {
       throw new UnauthorizedException("Token has expired");
     }
     const hashedPassword = await bcrypt.hash(resetPasswordDTO.newPassword, 10);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: token.user.id },
-        data: {
-          password: hashedPassword,
-          passwordChangedAt: new Date(),
-        },
+    await this.em.transactional(async (tx) => {
+      const user = await tx.findOneOrFail(User, { id: token.user.id });
+      tx.assign(user, {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
       });
+      await tx.flush();
       await this.tokenService.revokeToken({
         token: resetPasswordDTO.token,
         reason: "Password reset",
@@ -494,13 +492,13 @@ export class AuthService {
       );
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        password: true,
+    const user = await this.em.findOne(
+      User,
+      { id },
+      {
+        fields: ["id", "password"],
       },
-    });
+    );
 
     if (!user) {
       throw new UnauthorizedException("User not found");
@@ -516,25 +514,23 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
-        data: {
-          password: hashedPassword,
-          passwordChangedAt: new Date(),
-          forcePasswordChange: false,
-        },
+    await this.em.transactional(async (tx) => {
+      const user = await tx.findOneOrFail(User, { id });
+      tx.assign(user, {
+        password: hashedPassword,
+        passwordChangedAt: new Date(),
+        forcePasswordChange: false,
       });
+      await tx.flush();
 
-      await tx.auditLog.create({
-        data: {
-          userId: id,
-          performedById: id,
-          action: AuditAction.PASSWORD_CHANGE,
-          entityType: "User",
-          entityId: id,
-        },
+      tx.create(AuditLog, {
+        user: tx.getReference(User, id),
+        performedBy: tx.getReference(User, id),
+        action: AUDIT_ACTION.PASSWORD_CHANGE,
+        entityType: "User",
+        entityId: id,
       });
+      await tx.flush();
     });
 
     // Revoke all existing tokens after password change
@@ -557,7 +553,7 @@ export class AuthService {
     await this.auditService.log({
       userId,
       performedById,
-      action: AuditAction.TOKEN_REVOKE,
+      action: AUDIT_ACTION.TOKEN_REVOKE,
       entityType: "Token",
       metadata: { reason, revokedCount: count },
     });
@@ -575,7 +571,7 @@ export class AuthService {
     // Check if token is revoked
     const isValid = await this.tokenService.verifyToken(
       refreshToken,
-      TokenType.REFRESH,
+      DB_TOKEN_TYPE.REFRESH,
     );
     if (!isValid) {
       throw new UnauthorizedException("Token has been revoked");
@@ -592,8 +588,9 @@ export class AuthService {
       throw new UnauthorizedException("Invalid refresh token");
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId, deletedAt: null },
+    const user = await this.em.findOne(User, {
+      id: userId,
+      deletedAt: null,
     });
     if (!user) throw new UnauthorizedException("Invalid refresh token");
 
@@ -623,7 +620,7 @@ export class AuthService {
       this.tokenService.storeToken({
         userId: user.id,
         token: newAccessToken,
-        type: TokenType.ACCESS,
+        type: DB_TOKEN_TYPE.ACCESS,
         expiresAt: accessExpiry,
         ipAddress,
         userAgent,
@@ -631,7 +628,7 @@ export class AuthService {
       this.tokenService.storeToken({
         userId: user.id,
         token: newRefreshToken,
-        type: TokenType.REFRESH,
+        type: DB_TOKEN_TYPE.REFRESH,
         expiresAt: refreshExpiry,
         ipAddress,
         userAgent,
@@ -654,7 +651,11 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<UserWithProfile> {
-    const user = await this.userRepository.findByEmail(email);
+    const user = await this.em.findOne(
+      User,
+      { email },
+      { populate: ["profile"] },
+    );
     if (!user) throw new UnauthorizedException("Invalid credentials");
 
     // Check if account is locked
@@ -668,7 +669,7 @@ export class AuthService {
     const isPasswordValid = await this.comparePassword(password, user.password);
     if (!isPasswordValid) {
       // Increment failed login attempts
-      await this.userRepository.incrementFailedLoginAttempts(user.id);
+      await this.incrementFailedLoginAttempts(user.id);
       throw new UnauthorizedException("Invalid credentials");
     }
 
@@ -690,6 +691,58 @@ export class AuthService {
   }
 
   /**
+   * Update last login info. Inlined from the deleted `UserRepository`; failures
+   * are logged rather than thrown so they cannot break the login response.
+   * @param id User ID
+   * @param ipAddress IP Address
+   */
+  private async updateLastLogin(id: string, ipAddress?: string): Promise<void> {
+    try {
+      const user = await this.em.findOne(User, { id });
+      if (!user) return;
+
+      this.em.assign(user, {
+        lastLoginAt: new Date(),
+        lastLoginIp: ipAddress,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      });
+      await this.em.flush();
+    } catch (error: unknown) {
+      this.logger.error(`Error updating last login: ${String(error)}`);
+    }
+  }
+
+  /**
+   * Increment failed login attempts. Inlined from the deleted `UserRepository`;
+   * failures are logged rather than thrown.
+   * @param id User ID
+   */
+  private async incrementFailedLoginAttempts(id: string): Promise<void> {
+    try {
+      const user = await this.em.findOne(User, { id });
+      if (!user) return;
+
+      const newAttempts = user.failedLoginAttempts + 1;
+      const changes: { failedLoginAttempts: number; lockedUntil?: Date } = {
+        failedLoginAttempts: newAttempts,
+      };
+
+      // Lock account after 5 failed attempts for 15 minutes
+      if (newAttempts >= 5) {
+        changes.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+      }
+
+      this.em.assign(user, changes);
+      await this.em.flush();
+    } catch (error: unknown) {
+      this.logger.error(
+        `Error incrementing failed login attempts: ${String(error)}`,
+      );
+    }
+  }
+
+  /**
    * Verifies a user's email address using a verification token.
    * Validates that the token exists, has not expired, and has not been revoked.
    * When valid, marks the user's email as verified and revokes the token so it
@@ -707,24 +760,26 @@ export class AuthService {
 
     const tokenHash = this.tokenService.hashToken(token);
 
-    const storedToken = await this.prisma.token.findUnique({
-      where: {
+    const storedToken = await this.em.findOne(
+      Token,
+      {
         tokenHash,
-        type: TokenType.EMAIL_VERIFICATION,
+        type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
       },
-      select: {
-        revokedAt: true,
-        expiresAt: true,
-        user: {
-          select: {
-            id: true,
-            emailVerified: true,
-          },
-        },
+      {
+        populate: ["user"],
+        fields: ["revokedAt", "expiresAt", "user.id", "user.emailVerified"],
       },
-    });
+    );
 
     if (!storedToken) {
+      throw new BadRequestException("Invalid verification token");
+    }
+
+    // The global soft-delete filter applies to the populated `user` relation,
+    // so a token whose owner has since been deleted comes back with a null
+    // user rather than throwing a TypeError further down.
+    if (!storedToken.user) {
       throw new BadRequestException("Invalid verification token");
     }
 
@@ -737,60 +792,64 @@ export class AuthService {
     }
 
     if (storedToken.user.emailVerified) {
-      await this.prisma.token.updateMany({
-        where: {
-          userId: storedToken.user.id,
-          type: TokenType.EMAIL_VERIFICATION,
+      await this.em.nativeUpdate(
+        Token,
+        {
+          user: storedToken.user.id,
+          type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
           revokedAt: null,
         },
-        data: {
+        {
           revokedAt: now,
           revokedReason: "Email already verified",
         },
-      });
+      );
 
       return { message: "Email is already verified" };
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: storedToken.user.id },
-        data: {
-          emailVerified: true,
-          emailVerifiedAt: now,
-        },
+    await this.em.transactional(async (tx) => {
+      const user = await tx.findOneOrFail(User, { id: storedToken.user.id });
+      tx.assign(user, {
+        emailVerified: true,
+        emailVerifiedAt: now,
       });
+      await tx.flush();
 
-      await tx.token.updateMany({
-        where: {
-          userId: storedToken.user.id,
-          type: TokenType.EMAIL_VERIFICATION,
+      await tx.nativeUpdate(
+        Token,
+        {
+          user: storedToken.user.id,
+          type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
           revokedAt: null,
         },
-        data: {
+        {
           revokedAt: now,
           revokedReason: "Email verified",
         },
-      });
+      );
     });
 
     return { message: "Email verified successfully" };
   }
 
   async getAuthDetails(id: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        twoFactorEnabled: true,
-        lastLoginAt: true,
-        passwordChangedAt: true,
-        forcePasswordChange: true,
-        isActive: true,
+    const user = await this.em.findOne(
+      User,
+      { id },
+      {
+        fields: [
+          "id",
+          "email",
+          "role",
+          "twoFactorEnabled",
+          "lastLoginAt",
+          "passwordChangedAt",
+          "forcePasswordChange",
+          "isActive",
+        ],
       },
-    });
+    );
 
     if (!user) {
       throw new UnauthorizedException("User not found");
@@ -879,20 +938,21 @@ export class AuthService {
   ): Promise<void> {
     const now = new Date();
 
-    const currentToken = await this.prisma.token.findFirst({
-      where: {
-        userId,
-        type: TokenType.EMAIL_VERIFICATION,
+    const currentToken = await this.em.findOne(
+      Token,
+      {
+        user: userId,
+        type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
         revokedAt: null,
         deletedAt: null,
       },
-      orderBy: {
-        expiresAt: "desc",
+      {
+        orderBy: {
+          expiresAt: "desc",
+        },
+        fields: ["expiresAt"],
       },
-      select: {
-        expiresAt: true,
-      },
-    });
+    );
 
     if (currentToken && currentToken.expiresAt > now) {
       return;
@@ -901,31 +961,31 @@ export class AuthService {
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const expiresAt = getTokenExpiry(this.emailVerificationTokenExpiresIn);
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.token.updateMany({
-        where: {
-          userId,
-          type: TokenType.EMAIL_VERIFICATION,
+    await this.em.transactional(async (tx) => {
+      await tx.nativeUpdate(
+        Token,
+        {
+          user: userId,
+          type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
           revokedAt: null,
           expiresAt: {
-            lte: now,
+            $lte: now,
           },
         },
-        data: {
+        {
           revokedAt: now,
           revokedReason: "Email verification token expired",
         },
-      });
+      );
 
-      await tx.token.create({
-        data: {
-          userId,
-          token: verificationToken,
-          tokenHash: this.tokenService.hashToken(verificationToken),
-          type: TokenType.EMAIL_VERIFICATION,
-          expiresAt,
-        },
+      tx.create(Token, {
+        user: tx.getReference(User, userId),
+        token: verificationToken,
+        tokenHash: this.tokenService.hashToken(verificationToken),
+        type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
+        expiresAt,
       });
+      await tx.flush();
     });
 
     await this.mailQueueService.enqueueEmail({
@@ -943,9 +1003,8 @@ export class AuthService {
     ipAddress: string,
     userAgent: string = "undefined",
   ): Promise<LoginResponseDTO> {
-
     // Update last login info
-    await this.userRepository.updateLastLogin(user.id, ipAddress);
+    await this.updateLastLogin(user.id, ipAddress);
 
     const accessToken = this.generateJwt(
       {
@@ -968,7 +1027,7 @@ export class AuthService {
       this.tokenService.storeToken({
         userId: user.id,
         token: accessToken,
-        type: TokenType.ACCESS,
+        type: DB_TOKEN_TYPE.ACCESS,
         expiresAt: accessExpiry,
         ipAddress,
         userAgent,
@@ -976,7 +1035,7 @@ export class AuthService {
       this.tokenService.storeToken({
         userId: user.id,
         token: refreshToken,
-        type: TokenType.REFRESH,
+        type: DB_TOKEN_TYPE.REFRESH,
         expiresAt: refreshExpiry,
         ipAddress,
         userAgent,
@@ -984,23 +1043,20 @@ export class AuthService {
     ]);
 
     // Keep login-history persistence non-blocking to avoid impacting auth response latency.
-    void this.prisma.loginHistory
-      .create({
-        data: {
-          userId: user.id,
-          ipAddress,
-          userAgent,
-        },
-      })
-      .catch((error) => {
-        this.logger.error(`Error logging login history: ${error}`);
-      });
+    this.em.create(LoginHistory, {
+      user: this.em.getReference(User, user.id),
+      ipAddress,
+      userAgent,
+    });
+    void this.em.flush().catch((error) => {
+      this.logger.error(`Error logging login history: ${error}`);
+    });
 
     // Audit log
     await this.auditService.log({
       userId: user.id,
       performedById: user.id,
-      action: AuditAction.LOGIN,
+      action: AUDIT_ACTION.LOGIN,
       entityType: "User",
       entityId: user.id,
       ipAddress,

@@ -45,8 +45,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
  
-      - name: Generate Prisma client
-        run: pnpm prisma generate
  
       - name: Type-check
         run: pnpm exec tsc --noEmit   # no typecheck script in package.json, call tsc directly
@@ -150,11 +148,13 @@ jobs:
             # Pull latest image
             docker pull $REGISTRY/$IMAGE_NAME:uat
  
-            # Run pending Prisma migrations before restarting
+            # Apply pending MikroORM migrations before restarting. This reads
+            # the compiled config at dist/mikro-orm.config.js and the compiled
+            # migrations under dist/migrations.
             docker run --rm \
               --env-file /opt/neurox/.env.uat \
               $REGISTRY/$IMAGE_NAME:uat \
-              node_modules/.bin/prisma migrate deploy
+              node_modules/.bin/mikro-orm migration:up
  
             # Rolling restart of app and worker only (rabbitmq/mailpit untouched)
             docker compose -f docker-compose.uat.yml up -d --no-deps app worker

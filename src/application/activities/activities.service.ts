@@ -1,19 +1,17 @@
-import { PrismaService } from "@/common";
 import { CONTEXT_TYPES, ContextType } from "@/common/constant";
 import { RequestUserType } from "@/common/types/request.type";
+import { Activity } from "@/database/entities";
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
 } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { EntityManager, FilterQuery } from "@mikro-orm/postgresql";
 import { ActivitiesListDTO } from "./dto/activities-list.dto";
 
 @Injectable()
 export class ActivitiesService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) { }
+  constructor(private readonly em: EntityManager) {}
 
   async getActivities(user: RequestUserType, dto: ActivitiesListDTO) {
     if (
@@ -29,7 +27,7 @@ export class ActivitiesService {
       await this.verifyContextAccess(user, dto.contextType, dto.contextId);
     }
 
-    const where: Prisma.ActivityWhereInput = {};
+    const where: FilterQuery<Activity> = {};
 
     if (dto.entityType && dto.entityId) {
       where.entityType = dto.entityType;
@@ -42,64 +40,66 @@ export class ActivitiesService {
     }
 
     if (dto.actorId?.length) {
-      where.actorId = {
-        in: dto.actorId,
+      where.actor = {
+        $in: dto.actorId,
       };
     }
 
     if (dto.since || dto.until) {
-      where.createdAt = {};
-
-      if (dto.since) {
-        where.createdAt.gte = new Date(dto.since);
-      }
-
-      if (dto.until) {
-        where.createdAt.lte = new Date(dto.until);
-      }
+      where.createdAt = {
+        ...(dto.since ? { $gte: new Date(dto.since) } : {}),
+        ...(dto.until ? { $lte: new Date(dto.until) } : {}),
+      };
     }
 
     const cursor = dto.cursor
       ? JSON.parse(Buffer.from(dto.cursor, "base64").toString())
       : null;
 
-    const activities = await this.prisma.activity.findMany({
-      where,
+    // `em.find` has no positional cursor, so the equivalent of Prisma's
+    // `cursor: { id }` + `skip: 1` is a keyset resume: the cursor row's
+    // ordering key is resolved and the query continues strictly after it in
+    // `[createdAt desc, id desc]` order. A cursor whose row no longer exists
+    // matches nothing, exactly as the positional cursor did.
+    if (cursor) {
+      const cursorActivity = await this.em.findOne(
+        Activity,
+        { id: cursor.id },
+        { fields: ["createdAt"] },
+      );
 
-      take: dto.limit + 1,
+      where.$or = cursorActivity
+        ? [
+            { createdAt: { $lt: cursorActivity.createdAt } },
+            {
+              createdAt: cursorActivity.createdAt,
+              id: { $lt: cursor.id },
+            },
+          ]
+        : [{ id: { $in: [] } }];
+    }
 
-      skip: cursor ? 1 : 0,
+    const activities = await this.em.find(Activity, where, {
+      fields: [
+        "id",
+        "type",
+        "entityType",
+        "entityId",
+        "contextType",
+        "contextId",
+        "createdAt",
+        "data",
+        "actor.id",
+        "actor.username",
+        "actor.profile.firstName",
+        "actor.profile.lastName",
+      ],
 
-      cursor: cursor
-        ? {
-          id: cursor.id,
-        }
-        : undefined,
+      populate: ["actor", "actor.profile"],
 
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
 
-      select: {
-        id: true,
-        type: true,
-        entityType: true,
-        entityId: true,
-        contextType: true,
-        contextId: true,
-        createdAt: true,
-        data: true,
-        actor: {
-          select: {
-            id: true,
-            username: true,
-            profile: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
-      },
+      limit: dto.limit + 1,
     });
 
     const hasMore = activities.length > dto.limit;
@@ -112,10 +112,10 @@ export class ActivitiesService {
 
     const nextCursor = last
       ? Buffer.from(
-        JSON.stringify({
-          id: last.id,
-        }),
-      ).toString("base64")
+          JSON.stringify({
+            id: last.id,
+          }),
+        ).toString("base64")
       : null;
 
     return {
@@ -146,5 +146,4 @@ export class ActivitiesService {
         throw new ForbiddenException("Invalid context type");
     }
   }
-
 }

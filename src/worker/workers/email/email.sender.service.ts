@@ -1,11 +1,11 @@
-import { EMAIL_TEMPLATES } from "@/common/modules/mail-queue/mail-queue.constants";
+import { EMAIL_TEMPLATES } from "@/infra/mail-queue/mail-queue.constants";
 import {
   GenericEmailMessage,
   RawEmailMessage,
   ResearcherCredentialsPayload,
   TemplatedEmailMessage,
-} from "@/common/modules/mail-queue/mail-queue.types";
-import { TemplateRendererService } from "@/common/modules/mail-templates/template-renderer.service";
+} from "@/infra/mail-queue/mail-queue.types";
+import { TemplateRendererService } from "@/infra/mail-templates/template-renderer.service";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";

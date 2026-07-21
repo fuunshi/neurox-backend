@@ -1,3 +1,4 @@
+import { AccountLifecycleService } from "@/application/account/account-lifecycle.service";
 import { AllowTokenTypes, Public } from "@/common/decorators/auth.decorator";
 import { AuthenticatedRequest } from "@/common/types/request.type";
 import { TOKEN_TYPE } from "@/common/types/token.type";
@@ -16,6 +17,7 @@ import {
   LoginResponseDTO,
 } from "./dto/login.dto";
 import { RefreshDTO, RefreshResponseDTO } from "./dto/refresh.dto";
+import { RecoverAccountDTO } from "./dto/recover-account.dto";
 import { ResetPasswordDTO } from "./dto/reset-password.dto";
 import { UpdatePasswordDTO } from "./dto/update-password.dto";
 import { VerifyEmailQueryDTO } from "./dto/verify-email.query.dto";
@@ -24,7 +26,10 @@ import { MFADTO } from "./dto/verify-mfa.dto";
 @ApiTags("Auth")
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly accountLifecycle: AccountLifecycleService,
+  ) {}
 
   /**
    * This Method calls login service which handles the login logic.
@@ -162,6 +167,43 @@ export class AuthController {
       ipAddress,
       userAgent,
     );
+  }
+
+  /**
+   * Restores a soft-deleted account that is still inside its recovery window.
+   *
+   * Ownership is proven with the account's original password rather than an
+   * emailed link, so recovery does not depend on mail delivery to an address
+   * the user may no longer control. Registration returns
+   * `ACCOUNT_RECOVERABLE` when this endpoint is the right next step.
+   *
+   * Tokens are not issued here; the caller logs in normally afterwards, which
+   * keeps token issuance in one place.
+   */
+  @Public()
+  @Post("recover-account")
+  @ApiOperation({ summary: "Recover a recently deleted account" })
+  @ApiResponse({
+    status: 200,
+    description: "Account recovered",
+    type: String,
+  })
+  @ApiResponse({
+    status: 401,
+    description:
+      "No recoverable account, the recovery window has expired, or the password is wrong",
+  })
+  async recoverAccount(
+    @Body() recoverAccountDTO: RecoverAccountDTO,
+  ): Promise<{ message: string }> {
+    await this.accountLifecycle.recover(
+      recoverAccountDTO.email,
+      recoverAccountDTO.password,
+    );
+
+    return {
+      message: "Account recovered successfully. You can now log in.",
+    };
   }
   /**
    * This Method calls logout service which handles the logout logic.

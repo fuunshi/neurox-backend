@@ -72,8 +72,14 @@ export class TokenService {
       type: tokenType,
     });
 
+    // Fail CLOSED. This previously returned `true`, on the theory that an
+    // unknown token is stale and JWT validation would catch it -- but this is
+    // the *revocation* check, and `revokeToken` works by matching a row. Any
+    // token whose row is absent (hash secret rotated, row cleaned up, or a
+    // forged token whose hash simply is not present) therefore bypassed
+    // revocation entirely, silently.
     if (!storedToken) {
-      return true; // Token not in database, might be an old token - let JWT validation handle it
+      return false;
     }
 
     // Check if token is revoked

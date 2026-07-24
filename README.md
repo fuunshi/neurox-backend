@@ -1,53 +1,113 @@
-# Flash Cards Backend
+# neurox Backend
 
-NestJS backend reorganized into a layered structure:
+NestJS API on Fastify, with PostgreSQL via MikroORM, Redis/BullMQ for background
+jobs, and SMTP email. Two deployable runtimes share one codebase:
 
-- `src/infra`: infrastructure concerns such as config, persistence, cache, logging, throttling, token handling, and background job queues.
-- `src/core`: shared domain/security primitives that are not tied to HTTP or external providers.
-- `src/application`: core business logic and use-case services.
-- `src/api`: HTTP controller modules only. Each feature has a thin API module that imports the matching application module.
-- `src/integrations`: third-party clients and adapters, including Gemini.
-- `src/worker`: background worker entrypoints and queue processors.
+- **HTTP API** — `src/main.ts` → `AppModule`. Fastify, Swagger at `/api/docs`, port 3000.
+- **Worker** — `src/worker.main.ts` → `WorkerModule`. BullMQ consumer, no HTTP port.
 
-## Folder Structure
+## Getting started
+
+```bash
+pnpm install
+pnpm run migrate:up         # apply migrations
+pnpm run start:dev          # HTTP API (watch)
+pnpm run start:worker:dev   # worker (watch)
+```
+
+Requires PostgreSQL and Redis. Configuration is read from `.env` / `.env.local`;
+`.env.template` documents every key. `JWT_SECRET`, `DATABASE_URL` and
+`TOKEN_HASH_SECRET` are **required** — the app refuses to start without them.
+
+## Layered structure
+
+| Path | Contains |
+| --- | --- |
+| `src/api` | HTTP controllers only. One `<feature>-api/` module per feature, importing the matching application module. |
+| `src/application` | Business logic: services, orchestration, transactions, audit writes. |
+| `src/database` | MikroORM entities and the database module. |
+| `src/infra` | Infrastructure modules: config, audit, logger, token, throttler, queue, mail-queue, mail-templates, settings, redis. |
+| `src/common` | Cross-cutting code: constants, decorators, DTOs, guards, filters, interceptors, utils. |
+| `src/integrations` | Third-party clients. |
+| `src/worker` | Queue processors and their schedulers. |
+
+Dependency direction is one-way: `api → application → infra`. Nothing in
+`infra` may import `api` or `application`.
 
 ```text
 src/
-  app.module.ts              # HTTP application composition root
   main.ts                    # HTTP bootstrap
-  worker.main.ts             # BullMQ worker bootstrap
-  api/                       # Controller-only modules
-    auth-api/
-    user-api/
-    activities-api/
-    analytics-api/
-  application/               # Use cases and business rules
-    auth/
-    user/
-    activities/
-    analytics/
-  core/                      # Security and shared domain policies
-  infra/                     # Infrastructure modules and shared providers
-    config/
-    database/
-    cache/
-    messaging/
-    audit/
-    logger/
-  integrations/              # External service clients
-    gemini/
-  worker/                    # Queue workers and processors
+  worker.main.ts             # worker bootstrap
+  app.module.ts              # HTTP composition root
+  api/                       # controller-only modules
+  application/               # use cases and business rules
+  database/                  # entities + MikroORM module
+  infra/                     # infrastructure modules
+  common/                    # cross-cutting concerns
+  integrations/              # external service clients
+  worker/workers/<domain>/   # processors + schedulers
+  migrations/                # MikroORM migrations
 ```
 
-## Runtime Composition
+## Data layer
 
-The HTTP app is composed from `InfraModule`, `IntegrationsModule`, `ApplicationModule`, `ApiModule`, and `CoreModule`.
+PostgreSQL via **MikroORM 7**, configured in `src/mikro-orm.config.ts`.
+Entities live in `src/database/entities` and are defined with v7's `defineEntity`
+API — note that v7 **removed decorators**, so there is no `@Entity()` here.
 
-The worker process uses BullMQ instead of RabbitMQ for background jobs. Email and other queue jobs should be handled through the BullMQ queue layer under `src/infra/messaging` and processed from `src/worker/workers`.
+Schema changes go through migrations, which are real: `migrate:up` in CI applies
+pending migrations rather than silently doing nothing.
+
+```bash
+pnpm run migrate:make    # generate a migration from entity changes
+pnpm run migrate:up      # apply pending
+pnpm run migrate:list    # list
+pnpm run schema:dump     # print the DDL without applying
+```
+
+**Soft delete** is enforced centrally by a MikroORM filter declared on each
+soft-deletable entity, so reads exclude `deletedAt` rows by default. Opt out per
+query with `{ filters: { softDelete: false } }` — the account lifecycle service
+does this, since soft-deleted rows are exactly what it operates on.
+
+**UUID primary keys** rely on a `gen_random_uuid()` database default. MikroORM
+does not generate them, so entities must not be inserted without it.
+
+## Background jobs
+
+BullMQ on Redis. Queues are registered in `src/infra/queue/queue.module.ts`;
+processors live under `src/worker/workers/<domain>/`.
+
+- `mail` — outbound email, rendered from `.mjml.hbs` templates in
+  `src/infra/mail-templates/templates`.
+- `account` — a cron-scheduled job that releases the email addresses of accounts
+  past their recovery grace period.
+
+RabbitMQ (AMQP) support is preserved but **not wired**: see
+`src/infra/mail-queue/amqp`. Enabling it means swapping the mail queue module and
+providing an AMQP consumer to replace `EmailWorkerProcessor`.
+
+## Account recovery
+
+Deleting an account is soft and reversible for a configurable grace period
+(default 7 days, editable by an admin via the `app_setting` table).
+
+- Registering with a recoverable address returns `409` with
+  `code: "ACCOUNT_RECOVERABLE"` and a `recoverableUntil` timestamp.
+- `POST /auth/recover-account` restores the account, proving ownership with the
+  original password.
+- Once the window closes, the cron job rewrites the address to
+  `<deletedAtMillis>-<original>`, freeing it for reuse while preserving history.
+
+## Testing
+
+```bash
+pnpm run test        # unit (src/**/*.spec.ts)
+pnpm run test:e2e    # e2e (test/*.e2e-spec.ts) — needs PostgreSQL and Redis
+```
 
 ## Notes
 
-- API modules should stay controller-only.
-- Application modules should hold services, repositories, and domain workflows.
-- Infrastructure modules should own external dependencies and cross-cutting providers.
-- Gemini-specific logic belongs under `src/integrations/gemini`.
+- API modules stay controller-only; no business logic, no direct database access.
+- Application services own transactions and orchestration.
+- Long-running or retryable work goes through a queue, never inline in a request.

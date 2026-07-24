@@ -1,7 +1,7 @@
 {
-  "name": "nestjs-backend-template",
+  "name": "neurox-backend",
   "version": "0.0.1",
-  "description": "A production-ready NestJS boilerplate template with authentication, authorization, rate limiting, and more",
+  "description": "neurox backend API — NestJS on Fastify, PostgreSQL via MikroORM, Redis/BullMQ queues and SMTP email",
   "author": "fuunshi",
   "private": true,
   "license": "MIT",

@@ -40,3 +40,6 @@ yarn-error.log*
 
 .pnpm_store
 .pnpm-store
+# Claude Code / AI assistant files (local only, never published)
+CLAUDE.md
+.claude/

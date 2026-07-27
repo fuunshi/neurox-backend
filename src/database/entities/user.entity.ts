@@ -4,8 +4,11 @@ import { ACCOUNT_STATUS } from "@/common/constant/enums/account-status.enum";
 import { ROLE } from "@/common/constant/enums/role.enum";
 import { Activity } from "./activity.entity";
 import { AuditLog } from "./audit-log.entity";
+import { Deck } from "./deck.entity";
+import { GenerationJob } from "./generation-job.entity";
 import { LoginHistory } from "./login-history.entity";
 import { RequestLog } from "./request-log.entity";
+import { Source } from "./source.entity";
 import { Token } from "./token.entity";
 import { UserProfile } from "./user-profile.entity";
 
@@ -77,6 +80,11 @@ const UserSchema = defineEntity({
     performedAuditLogs: () => p.oneToMany(AuditLog).mappedBy("performedBy"),
     requestLogs: () => p.oneToMany(RequestLog).mappedBy("user"),
     activities: () => p.oneToMany(Activity).mappedBy("actor"),
+
+    // Flash-card domain
+    decks: () => p.oneToMany(Deck).mappedBy("user"),
+    sources: () => p.oneToMany(Source).mappedBy("user"),
+    generationJobs: () => p.oneToMany(GenerationJob).mappedBy("user"),
   },
   filters: softDeleteFilters,
   indexes: [

@@ -6,6 +6,12 @@ export const ENTITY_TYPES = {
   ISSUE_COMMENT: "ISSUE_COMMENT",
   PROJECT: "PROJECT",
   PROJECT_REQUEST: "PROJECT_REQUEST",
+
+  // Flash-card domain
+  DECK: "DECK",
+  FLASH_CARD: "FLASH_CARD",
+  SOURCE: "SOURCE",
+  GENERATION_JOB: "GENERATION_JOB",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

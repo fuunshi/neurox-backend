@@ -1,3 +1,4 @@
+export * from "./cursor-paginated-query.dto";
 export * from "./id-cid-param.dto";
 export * from "./id-param.dto";
 export * from "./order.query.dto";

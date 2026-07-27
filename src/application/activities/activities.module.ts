@@ -1,10 +1,11 @@
+import { InfraModule } from "@/infra/infra.module";
 import { Module } from "@nestjs/common";
 import { ActivitiesService } from "./activities.service";
-import { InfraModule } from "@/infra/infra.module";
+import { ActivityRecorderService } from "./activity-recorder.service";
 
 @Module({
   imports: [InfraModule],
-  providers: [ActivitiesService],
-  exports: [ActivitiesService],
+  providers: [ActivitiesService, ActivityRecorderService],
+  exports: [ActivitiesService, ActivityRecorderService],
 })
 export class ActivitiesApplicationModule {}

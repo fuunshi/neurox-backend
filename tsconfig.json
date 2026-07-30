@@ -4,7 +4,10 @@
     "dist",
     "test",
     "**/*.spec.ts",
-    "**/*.e2e-spec.ts"
+    "**/*.e2e-spec.ts",
+    // Vitest configs live outside `rootDir` and are loaded by Vitest itself.
+    "vitest.config.mts",
+    "vitest.e2e.config.mts"
   ],
   
   "compilerOptions": {
@@ -28,7 +31,7 @@
     "allowSyntheticDefaultImports": true,
     "types": [
       "node",
-      "jest"
+      "vitest/globals"
     ],
     "sourceMap": true,
     "incremental": true,

@@ -1,3 +1,4 @@
+import { ConfigModule } from "@/infra/config/config.module";
 import { Module, Global } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -10,6 +11,9 @@ import { APP_GUARD } from "@nestjs/core";
 @Module({
   imports: [
     NestThrottlerModule.forRootAsync({
+      // Nest 12 requires `imports` to be declared on async options even when
+      // the provider comes from a @Global() module.
+      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => [
         {

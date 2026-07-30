@@ -1,3 +1,4 @@
+import { ConfigModule } from "@/infra/config/config.module";
 import { Module } from "@nestjs/common";
 import { RedisService } from "./redis.service";
 import { RedisModule as NestRedisModule } from "@nestjs-modules/ioredis";
@@ -6,6 +7,9 @@ import { ConfigService } from "@nestjs/config";
 @Module({
   imports: [
     NestRedisModule.forRootAsync({
+      // Nest 12 requires `imports` to be declared on async options even when
+      // the provider comes from a @Global() module.
+      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         type: "single",

@@ -1,15 +1,16 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { vi } from "vitest";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 
 describe("AppController", () => {
   let appController: AppController;
   const appServiceMock = {
-    getHello: jest.fn(() => "Hello World!"),
+    getHello: vi.fn(() => "Hello World!"),
   };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AppController],

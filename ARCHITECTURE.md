@@ -256,6 +256,7 @@ Code style is Prettier-owned (double quotes, semicolons, 2-space indent, `printW
 - `Dockerfile.prod`: `deps → build → prod-deps (--prod) → runner` (`node dist/main.js`; the worker service overrides the command with `node dist/worker.main.js`). `@mikro-orm/cli` is a **runtime** dependency so the deploy step can run migrations inside the image.
 - CI (`.github/workflows/uat-deploy.yml`, on push to `uat`): install → `tsc --noEmit` → tests → build/push image to GHCR → SSH deploy with `docker-compose.uat.yml` → `mikro-orm migration:up` (one-shot container) → rolling restart of `app` and `worker`.
 - Hooks: pre-commit formats with Prettier, pre-push runs a full build.
+- **Graceful shutdown**: `enableGracefulShutdown` (`common/utils/shutdown/`) is registered by both entrypoints. On SIGTERM/SIGINT it stops accepting connections, lets in-flight requests finish, and exits, with a 10s hard timeout as a backstop. It deliberately does **not** call `app.close()` — see §14.8.
 
 ## 14. Open questions / known deviations
 
@@ -266,3 +267,4 @@ Code style is Prettier-owned (double quotes, semicolons, 2-space indent, `printW
 5. **`token.token` stores the plaintext token** alongside `token_hash`. The hash is what lookups use, so the plaintext column is redundant as well as sensitive.
 6. **The api/ DTO shims and `CursorPaginationQueryDTO`** are untested; the pagination reference implementation changed from Prisma's positional cursor to a keyset resume during the MikroORM migration.
 7. **Pruning dependencies by grep is unreliable.** `@fastify/static` was removed as unused and broke boot, because `SwaggerModule` loads it dynamically. Any further pruning needs a runtime check, not a search.
+8. **`app.close()` does not resolve after the app has served a request.** Measured, not assumed: with zero requests it closes immediately; after a single request it never resolves, and neither does `MikroORM.close()` nor `MikroORM.close(true)`. There is **no connection leak** — the Postgres backend count settles at the pool size and stays flat across 50+ requests — so this affects teardown only, not steady-state. Graceful shutdown therefore drains via the HTTP server rather than `app.close()` (§13). Root cause not identified; worth revisiting, because it also means `enableShutdownHooks()` cannot be used.

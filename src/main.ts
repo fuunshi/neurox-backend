@@ -9,6 +9,7 @@ import { ConsoleLogger } from "@nestjs/common";
 import compression from "@fastify/compress";
 import fastifyHelmet from "@fastify/helmet";
 import { AppLoggerService } from "./common";
+import { enableGracefulShutdown } from "./common/utils/shutdown/graceful-shutdown.util";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -43,5 +44,9 @@ async function bootstrap() {
   SwaggerModule.setup("api/docs", app, document);
 
   await app.listen(process.env.PORT ?? 3000, "0.0.0.0");
+
+  // Registered after listen so signals arriving during startup are not handled
+  // against a server that is not accepting yet.
+  enableGracefulShutdown(app, { logger: appLogger });
 }
 void bootstrap();

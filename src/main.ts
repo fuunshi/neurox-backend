@@ -8,6 +8,8 @@ import {
 import { ConsoleLogger } from "@nestjs/common";
 import compression from "@fastify/compress";
 import fastifyHelmet from "@fastify/helmet";
+import multipart from "@fastify/multipart";
+import { SOURCE_LIMITS } from "./common/constant/source.constant";
 import { AppLoggerService } from "./common";
 import { enableGracefulShutdown } from "./common/utils/shutdown/graceful-shutdown.util";
 
@@ -31,6 +33,12 @@ async function bootstrap() {
   });
 
   await app.register(fastifyHelmet);
+
+  // Required for `POST /sources/upload`. The limit is enforced here as well as
+  // in the service so an oversized body is rejected before it is buffered.
+  await app.register(multipart, {
+    limits: { fileSize: SOURCE_LIMITS.MAX_UPLOAD_BYTES },
+  });
 
   const config = new DocumentBuilder()
     .setTitle("neurox AI API")

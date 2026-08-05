@@ -3,6 +3,7 @@ import { AccountApplicationModule } from "./account/account.module";
 import { ActivitiesApplicationModule } from "./activities/activities.module";
 import { AuthApplicationModule } from "./auth/auth.module";
 import { DeckApplicationModule } from "./deck/deck.module";
+import { SourceApplicationModule } from "./source/source.module";
 import { UserApplicationModule } from "./user/user.module";
 
 /**
@@ -18,6 +19,7 @@ import { UserApplicationModule } from "./user/user.module";
     ActivitiesApplicationModule,
     AccountApplicationModule,
     DeckApplicationModule,
+    SourceApplicationModule,
   ],
   exports: [
     AuthApplicationModule,
@@ -25,6 +27,7 @@ import { UserApplicationModule } from "./user/user.module";
     ActivitiesApplicationModule,
     AccountApplicationModule,
     DeckApplicationModule,
+    SourceApplicationModule,
   ],
 })
 export class ApplicationModule {}

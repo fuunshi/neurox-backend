@@ -28,7 +28,7 @@ const SourceSchema = defineEntity({
     /** Extracted plain text. Populated once status reaches READY. */
     rawText: p.text().fieldName("raw_text").nullable(),
     fileName: p.string().fieldName("file_name").nullable(),
-    mimeType: p.string().fieldName("mime_type"),
+    mimeType: p.string().fieldName("mime_type").nullable(),
     sizeBytes: p.integer().fieldName("size_bytes").nullable(),
     /** Where the uploaded original is stored, if retained. */
     storagePath: p.string().fieldName("storage_path").nullable(),

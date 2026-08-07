@@ -1,7 +1,5 @@
 import { Module, ValidationPipe } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from "@nestjs/core";
-import { JwtModule } from "@nestjs/jwt";
 
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
@@ -21,18 +19,7 @@ import { InfraModule } from "./infra/infra.module";
     IntegrationsModule,
     ApplicationModule,
     ApiModule,
-    JwtModule.registerAsync({
-      global: true,
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.getOrThrow<string>("auth.jwtSecret"),
-        signOptions: {
-          expiresIn: configService.getOrThrow<string>(
-            "auth.jwtExpiresIn",
-          ) as `${number}${"s" | "m" | "h" | "d"}`,
-        },
-      }),
-    }),
+    // JwtModule is registered by InfraModule so the worker gets it too.
   ],
   controllers: [AppController],
   providers: [

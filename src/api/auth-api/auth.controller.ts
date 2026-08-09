@@ -224,9 +224,18 @@ export class AuthController {
 
   /**
    * This Method calls refresh token service which generates a new refresh token.
+   *
+   * Accepts a REFRESH token in the Authorization header, not only an ACCESS
+   * token. Without this the guard applies its ACCESS-only default, so the
+   * endpoint is unusable for its one purpose: refreshing a session whose access
+   * token has already expired, which is the only time a client needs it. The
+   * service still verifies the refresh token against the token table, and the
+   * token is sent in the body as well because RefreshDTO requires it.
+   *
    * @returns A new access token and refresh token.
    */
   @Post("refresh")
+  @AllowTokenTypes(TOKEN_TYPE.REFRESH)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Refresh Token" })
   @ApiResponse({

@@ -256,7 +256,7 @@ export class SourceService {
       );
     }
 
-    return mapped as SourceType;
+    return mapped;
   }
 
   private async findOwned(userId: string, sourceId: string): Promise<Source> {

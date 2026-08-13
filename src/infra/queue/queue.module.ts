@@ -2,7 +2,7 @@ import { Module, Global } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BullModule } from "@nestjs/bullmq";
 import { ExampleProcessor } from "./processors/example.processor";
-import { ACCOUNT_QUEUE_NAME } from "./queue.constants";
+import { ACCOUNT_QUEUE_NAME, GENERATION_QUEUE_NAME } from "./queue.constants";
 import { QueueService } from "./queue.service";
 
 @Global()
@@ -30,6 +30,9 @@ import { QueueService } from "./queue.service";
       },
       {
         name: ACCOUNT_QUEUE_NAME,
+      },
+      {
+        name: GENERATION_QUEUE_NAME,
       },
     ),
   ],

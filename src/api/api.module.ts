@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ActivitiesApiModule } from "./activities-api/activities-api.module";
 import { AuthApiModule } from "./auth-api/auth-api.module";
 import { DeckApiModule } from "./deck-api/deck-api.module";
+import { GenerationApiModule } from "./generation-api/generation-api.module";
 import { SourceApiModule } from "./source-api/source-api.module";
 import { UserApiModule } from "./user-api/user-api.module";
 
@@ -17,6 +18,7 @@ import { UserApiModule } from "./user-api/user-api.module";
     ActivitiesApiModule,
     DeckApiModule,
     SourceApiModule,
+    GenerationApiModule,
   ],
 })
 export class ApiModule {}

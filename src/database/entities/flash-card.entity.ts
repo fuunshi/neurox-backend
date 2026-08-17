@@ -35,6 +35,39 @@ const FlashCardSchema = defineEntity({
       .default(CARD_STATUS.DRAFT),
     /** Manual ordering within a deck; null means unordered. */
     position: p.integer().nullable(),
+
+    // ---------------------------------------------------------------------
+    // Scheduling
+    //
+    // Denormalised onto the card rather than derived from `card_review`: the
+    // question the study screen asks on every visit is "what is due", and
+    // answering it from a log would mean a scan per card.
+    //
+    // A card that has never been reviewed has `dueAt` null and is treated as
+    // due. That keeps "new" and "due" in one query instead of two.
+    // ---------------------------------------------------------------------
+
+    /** When this card next comes up. Null means never reviewed, so due now. */
+    dueAt: p.datetime().fieldName("due_at").nullable(),
+    /** Current gap between reviews, in whole days. 0 until first success. */
+    intervalDays: p.integer().fieldName("interval_days").default(0),
+    /**
+     * Ease factor **× 100**, so 250 is 2.50.
+     *
+     * An integer on purpose. Ease is multiplied into the interval on every
+     * review, so a float is not just imprecise, it is *cumulatively*
+     * imprecise: a drift of 0.001 is invisible on one card and moves the due
+     * date by days after a few hundred reviews. Hundredths give more precision
+     * than the algorithm uses and keep the arithmetic exact.
+     */
+    easeFactor: p.integer().fieldName("ease_factor").default(250),
+    /** Consecutive successful reviews. Reset to 0 by AGAIN. */
+    repetitions: p.integer().default(0),
+    /** Times this card has been forgotten. Kept for the reader, not the
+     *  schedule — a card lapsed five times is one worth rewriting. */
+    lapses: p.integer().default(0),
+    lastReviewedAt: p.datetime().fieldName("last_reviewed_at").nullable(),
+
     deletedAt: p.datetime().fieldName("deleted_at").nullable(),
     createdAt: p
       .datetime()
@@ -53,6 +86,8 @@ const FlashCardSchema = defineEntity({
     { properties: ["deletedAt"] },
     // Cards are listed per deck; status filters study/quiz pools.
     { properties: ["deck", "status"] },
+    // The study pool: active cards ordered by when they are due.
+    { properties: ["deck", "status", "dueAt"] },
   ],
 });
 

@@ -777,6 +777,215 @@
       "comment": null
     },
     {
+      "name": "card_review",
+      "schema": "public",
+      "columns": {
+        "card_id": {
+          "name": "card_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "ease_after": {
+          "name": "ease_after",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "250",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "interval_after_days": {
+          "name": "interval_after_days",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "interval_before_days": {
+          "name": "interval_before_days",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "rating": {
+          "name": "rating",
+          "type": "review_rating",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "AGAIN",
+            "HARD",
+            "GOOD",
+            "EASY"
+          ],
+          "mappedType": "enum",
+          "nativeEnumName": "review_rating"
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "card_id",
+            "reviewed_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "card_review_card_id_reviewed_at_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "card_review_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "user_id",
+            "reviewed_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "card_review_user_id_reviewed_at_index",
+          "primary": false,
+          "unique": false
+        }
+      ],
+      "checks": [],
+      "triggers": [],
+      "foreignKeys": {
+        "card_review_card_id_foreign": {
+          "columnNames": [
+            "card_id"
+          ],
+          "constraintName": "card_review_card_id_foreign",
+          "localTableName": "public.card_review",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.flash_card"
+        },
+        "card_review_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "card_review_user_id_foreign",
+          "localTableName": "public.card_review",
+          "referencedColumnNames": [
+            "user_id"
+          ],
+          "referencedTableName": "public.user"
+        }
+      },
+      "comment": null
+    },
+    {
       "name": "deck",
       "schema": "public",
       "columns": {
@@ -1032,6 +1241,40 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "due_at": {
+          "name": "due_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "ease_factor": {
+          "name": "ease_factor",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "250",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
         "front": {
           "name": "front",
           "type": "text",
@@ -1100,6 +1343,57 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "interval_days": {
+          "name": "interval_days",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "lapses": {
+          "name": "lapses",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "last_reviewed_at": {
+          "name": "last_reviewed_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
         "position": {
           "name": "position",
           "type": "int",
@@ -1112,6 +1406,23 @@
           "precision": null,
           "scale": null,
           "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "repetitions": {
+          "name": "repetitions",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
           "comment": null,
           "collation": null,
           "enumItems": [],
@@ -1165,6 +1476,18 @@
           "composite": false,
           "constraint": false,
           "keyName": "flash_card_deck_id_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "deck_id",
+            "status",
+            "due_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "flash_card_deck_id_status_due_at_index",
           "primary": false,
           "unique": false
         },
@@ -4118,6 +4441,16 @@
         "SUCCEEDED",
         "FAILED",
         "CANCELLED"
+      ]
+    },
+    "review_rating": {
+      "name": "review_rating",
+      "schema": "public",
+      "items": [
+        "AGAIN",
+        "HARD",
+        "GOOD",
+        "EASY"
       ]
     },
     "role": {

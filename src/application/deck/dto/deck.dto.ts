@@ -133,6 +133,25 @@ export class CardResponseDTO {
   @ApiProperty({ enum: Object.values(CARD_STATUS) })
   status!: (typeof CARD_STATUS)[keyof typeof CARD_STATUS];
   @ApiProperty({ nullable: true }) generationJobId!: string | null;
+
+  // Scheduling. Exposed because the reader benefits from it — the review screen
+  // can say "back in 3 days", and a card's lapse count is a hint that the card
+  // itself needs rewriting rather than more reviewing. `easeFactor` stays
+  // internal: it is an implementation detail of the interval, and showing it
+  // invites tuning the algorithm instead of the card.
+  @ApiProperty({
+    nullable: true,
+    description: "When this card is next due. Null means never reviewed.",
+  })
+  dueAt!: Date | null;
+  @ApiProperty({ description: "Current gap between reviews, in days." })
+  intervalDays!: number;
+  @ApiProperty({ description: "Consecutive successful reviews." })
+  repetitions!: number;
+  @ApiProperty({ description: "How often this card has been forgotten." })
+  lapses!: number;
+  @ApiProperty({ nullable: true }) lastReviewedAt!: Date | null;
+
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 
@@ -142,6 +161,11 @@ export class CardResponseDTO {
     back: string;
     hint: string | null | undefined;
     status: (typeof CARD_STATUS)[keyof typeof CARD_STATUS];
+    dueAt?: Date | null;
+    intervalDays?: number;
+    repetitions?: number;
+    lapses?: number;
+    lastReviewedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
     deck: { id: string };
@@ -155,6 +179,13 @@ export class CardResponseDTO {
     dto.hint = card.hint ?? null;
     dto.status = card.status;
     dto.generationJobId = card.generationJob?.id ?? null;
+    // Defaulted rather than required, so a caller that selects a subset of
+    // columns still produces a valid response.
+    dto.dueAt = card.dueAt ?? null;
+    dto.intervalDays = card.intervalDays ?? 0;
+    dto.repetitions = card.repetitions ?? 0;
+    dto.lapses = card.lapses ?? 0;
+    dto.lastReviewedAt = card.lastReviewedAt ?? null;
     dto.createdAt = card.createdAt;
     dto.updatedAt = card.updatedAt;
     return dto;

@@ -5,6 +5,7 @@ import {
   ENTITY_TYPES,
 } from "@/common/constant/activity";
 import { CARD_STATUS } from "@/common/constant/enums";
+import { EASE } from "@/application/study/scheduling";
 import {
   buildPage,
   decodeCursor,
@@ -216,11 +217,38 @@ export class DeckService {
     const statusChanged =
       dto.status !== undefined && dto.status !== card.status;
 
+    /**
+     * Rewriting what a card asks or answers invalidates its schedule.
+     *
+     * The intervals were earned by recalling the *old* wording; carrying them
+     * over would tell the reader they know something they have never been asked.
+     * So the schedule resets and the card becomes new again — which is also the
+     * honest outcome, since the next review is genuinely the first one.
+     *
+     * A status change, a hint or a reorder does not reset anything: the
+     * question and the answer are unchanged, which is what was being learned.
+     */
+    const contentChanged =
+      (dto.front !== undefined && dto.front !== card.front) ||
+      (dto.back !== undefined && dto.back !== card.back);
+
     this.em.assign(card, {
       ...(dto.front !== undefined ? { front: dto.front } : {}),
       ...(dto.back !== undefined ? { back: dto.back } : {}),
       ...(dto.hint !== undefined ? { hint: dto.hint } : {}),
       ...(dto.status !== undefined ? { status: dto.status } : {}),
+      ...(contentChanged
+        ? {
+            dueAt: null,
+            intervalDays: 0,
+            easeFactor: EASE.DEFAULT,
+            repetitions: 0,
+            lastReviewedAt: null,
+            // `lapses` is deliberately kept: how often a card was forgotten is
+            // history, not schedule, and zeroing it would hide the signal that
+            // this card keeps failing.
+          }
+        : {}),
     });
     await this.em.flush();
 
@@ -235,7 +263,11 @@ export class DeckService {
       contextId: userId,
       parentEntityType: ENTITY_TYPES.DECK,
       parentEntityId: card.deck.id,
-      data: { front: card.front, status: card.status },
+      data: {
+        front: card.front,
+        status: card.status,
+        ...(contentChanged ? { scheduleReset: true } : {}),
+      },
     });
 
     return CardResponseDTO.from(card);

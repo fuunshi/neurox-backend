@@ -1,6 +1,7 @@
 export * from "./activity.entity";
 export * from "./app-setting.entity";
 export * from "./audit-log.entity";
+export * from "./card-review.entity";
 export * from "./deck.entity";
 export * from "./flash-card.entity";
 export * from "./generation-job.entity";
@@ -14,6 +15,7 @@ export * from "./user.entity";
 import { Activity } from "./activity.entity";
 import { AppSetting } from "./app-setting.entity";
 import { AuditLog } from "./audit-log.entity";
+import { CardReview } from "./card-review.entity";
 import { Deck } from "./deck.entity";
 import { FlashCard } from "./flash-card.entity";
 import { GenerationJob } from "./generation-job.entity";
@@ -38,4 +40,5 @@ export const ENTITIES = [
   FlashCard,
   Source,
   GenerationJob,
+  CardReview,
 ];

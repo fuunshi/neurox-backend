@@ -2,6 +2,7 @@ export * from "./account-status.enum";
 export * from "./audit-action.enum";
 export * from "./card-status.enum";
 export * from "./generation-job-status.enum";
+export * from "./review-rating.enum";
 export * from "./role.enum";
 export * from "./source-status.enum";
 export * from "./source-type.enum";
@@ -22,4 +23,5 @@ export const NATIVE_ENUM_NAMES = {
   SourceStatus: "source_status",
   CardStatus: "card_status",
   GenerationJobStatus: "generation_job_status",
+  ReviewRating: "review_rating",
 } as const;

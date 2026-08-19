@@ -1,12 +1,24 @@
+import { CardImprovementDTO } from "@/application/study/dto/improve.dto";
 import {
   DeckStatsDTO,
   ReviewCardDTO,
   ReviewResponseDTO,
+  StudyOverviewDTO,
   StudyPoolDTO,
 } from "@/application/study/dto/study.dto";
 import { StudyService } from "@/application/study/study.service";
 import { AuthenticatedRequest } from "@/common/types/request.type";
-import { Body, Controller, Get, Param, Post, Query, Req } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Req,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -52,6 +64,21 @@ export class StudyController {
     return this.studyService.getDeckStats(req.authContext.user.id, deckId);
   }
 
+  @Get("study/overview")
+  @ApiOperation({
+    summary: "Study statistics across every deck",
+    description:
+      "A streak, a 30-day review history, retention over that window, and what " +
+      "falls due over the next fortnight. Day boundaries are the reader's, taken " +
+      "from their profile, so a streak does not reset at the server's midnight.",
+  })
+  @ApiResponse({ status: 200, type: StudyOverviewDTO })
+  async getOverview(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<StudyOverviewDTO> {
+    return this.studyService.getOverview(req.authContext.user.id);
+  }
+
   @Post("cards/:id/review")
   @ApiOperation({
     summary: "Record a review and reschedule the card",
@@ -72,5 +99,24 @@ export class StudyController {
       id,
       dto.rating,
     );
+  }
+
+  @Post("cards/:id/improve")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Propose a rewrite of a card you keep forgetting",
+    description:
+      "Returns a suggestion and the reason for it. Nothing is saved — a card " +
+      "forgotten repeatedly is usually a badly written card rather than a hard " +
+      "fact, and a silent rewrite would change what the schedule is measuring. " +
+      "Accepting it goes through PATCH /cards/:id like any other edit. Needs " +
+      "GEMINI_API_KEY; without one this answers 503 and says so.",
+  })
+  @ApiResponse({ status: 200, type: CardImprovementDTO })
+  async improveCard(
+    @Req() req: AuthenticatedRequest,
+    @Param("id") id: string,
+  ): Promise<CardImprovementDTO> {
+    return this.studyService.improveCard(req.authContext.user.id, id);
   }
 }

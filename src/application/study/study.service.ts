@@ -1,5 +1,7 @@
 import { CardResponseDTO } from "@/application/deck/dto/deck.dto";
 import { CARD_STATUS } from "@/common/constant/enums";
+import { isUuid } from "@/common/utils/validation/is-uuid.util";
+import { CardImproverService, type CardImprovement } from "./card-improver.service";
 import type { ReviewRating } from "@/common/constant/enums/review-rating.enum";
 import {
   buildPage,
@@ -14,8 +16,14 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { DeckStatsDTO, StudyInclude, STUDY_INCLUDE } from "./dto/study.dto";
+import {
+  DeckStatsDTO,
+  StudyInclude,
+  StudyOverviewDTO,
+  STUDY_INCLUDE,
+} from "./dto/study.dto";
 import { schedule, type SchedulingState } from "./scheduling";
+import { computeStreak, fillDays, retentionRate } from "./stats";
 
 /**
  * Studying: what is due, and what a review does to the schedule.
@@ -32,7 +40,10 @@ import { schedule, type SchedulingState } from "./scheduling";
 export class StudyService {
   private readonly logger = new Logger(StudyService.name);
 
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly improver: CardImproverService,
+  ) {}
 
   /**
    * The cards to study now.
@@ -158,10 +169,192 @@ export class StudyService {
     };
   }
 
+  /**
+   * Proposes a rewrite of a card the reader keeps forgetting.
+   *
+   * Reads the card, hands the model its wording and its lapse count, and returns
+   * the suggestion untouched. Nothing is written: the reader accepts it through
+   * the ordinary edit endpoint, so there stays exactly one path that changes a
+   * card — and one place the schedule gets reset.
+   */
+  async improveCard(userId: string, cardId: string): Promise<CardImprovement> {
+    const card = await this.findOwnedCard(this.em, userId, cardId);
+
+    return this.improver.improve({
+      front: card.front,
+      back: card.back,
+      hint: card.hint,
+      // The lapse count is what makes this specific rather than generic advice
+      // about writing cards.
+      lapses: card.lapses,
+      sourceTitle: null,
+    });
+  }
+
   /** Counts for one deck, for the deck screen and the study header. */
   async getDeckStats(userId: string, deckId: string): Promise<DeckStatsDTO> {
     await this.findOwnedDeck(this.em, userId, deckId);
     return this.statsFor(this.em, userId, deckId);
+  }
+
+  /**
+   * Everything the stats screen needs, across every deck.
+   *
+   * One endpoint rather than four, because the API throttles per endpoint and
+   * this screen is a single view — four requests would spend four of the
+   * endpoint's budget to draw one page.
+   *
+   * Day boundaries are computed in the **reader's** timezone, taken from their
+   * profile. Using the server's would mean someone in Auckland seeing their
+   * evening session counted as tomorrow, and a streak that resets at an
+   * arbitrary hour is worse than no streak.
+   */
+  async getOverview(userId: string): Promise<StudyOverviewDTO> {
+    const timezone = await this.timezoneFor(this.em, userId);
+    const today = await this.currentDay(this.em, timezone);
+
+    const [dailyRows, forecastRows, totalsRows, activeRows] = await Promise.all([
+      // Reviews per day over the window. Only days with reviews come back; the
+      // gaps are filled in code so the chart plots a continuous axis rather than
+      // compressing a quiet week into nothing.
+      this.em.getConnection().execute<
+        Array<{ day: string; reviews: number; correct: number }>
+      >(
+        `select (r."reviewed_at" at time zone ?::text)::date::text as day,
+                count(*)::int as reviews,
+                count(*) filter (where r."rating" <> 'AGAIN')::int as correct
+           from "card_review" r
+          where r."user_id" = ?
+            and r."reviewed_at" >= now() - interval '90 days'
+          group by 1
+          order by 1`,
+        [timezone, userId],
+      ),
+
+      this.em.getConnection().execute<Array<{ day: string; due: number }>>(
+        `select (c."due_at" at time zone ?::text)::date::text as day,
+                count(*)::int as due
+           from "flash_card" c
+           join "deck" d on d."id" = c."deck_id"
+          where d."user_id" = ?
+            and d."deleted_at" is null
+            and c."deleted_at" is null
+            and c."status" = 'ACTIVE'
+            and c."due_at" is not null
+            and c."due_at" >= now()
+            and c."due_at" < now() + interval '14 days'
+          group by 1
+          order by 1`,
+        [timezone, userId],
+      ),
+
+      this.em
+        .getConnection()
+        .execute<Array<{ reviews: number; due_now: number }>>(
+          `select
+             (select count(*)::int from "card_review" r where r."user_id" = ?) as reviews,
+             (select count(*)::int
+                from "flash_card" c
+                join "deck" d on d."id" = c."deck_id"
+               where d."user_id" = ? and d."deleted_at" is null
+                 and c."deleted_at" is null
+                 and c."status" = 'ACTIVE'
+                 and (c."due_at" is null or c."due_at" <= now() or c."interval_days" = 0)
+             ) as due_now`,
+          [userId, userId],
+        ),
+
+      this.em.getConnection().execute<Array<{ active: number; learned: number }>>(
+        `select count(*) filter (where c."status" = 'ACTIVE')::int as active,
+                count(*) filter (
+                  where c."status" = 'ACTIVE' and c."last_reviewed_at" is not null
+                )::int as learned
+           from "flash_card" c
+           join "deck" d on d."id" = c."deck_id"
+          where d."user_id" = ? and d."deleted_at" is null and c."deleted_at" is null`,
+        [userId],
+      ),
+    ]);
+
+    const windowDays = 30;
+    const from = shiftDay(today, -(windowDays - 1));
+
+    const daily = fillDays(
+      dailyRows.map((row) => ({
+        day: row.day,
+        reviews: Number(row.reviews),
+        correct: Number(row.correct),
+      })),
+      { from, to: today },
+    );
+
+    // The forecast is filled the same way, so a quiet day reads as a quiet day
+    // rather than as a gap in the axis.
+    const forecast = fillDays(
+      forecastRows.map((row) => ({ day: row.day, reviews: 0, correct: 0 })),
+      { from: today, to: shiftDay(today, 13) },
+    ).map((entry) => ({
+      day: entry.day,
+      due: Number(forecastRows.find((row) => row.day === entry.day)?.due ?? 0),
+    }));
+
+    return {
+      totals: {
+        reviews: Number(totalsRows[0]?.reviews ?? 0),
+        activeCards: Number(activeRows[0]?.active ?? 0),
+        learnedCards: Number(activeRows[0]?.learned ?? 0),
+        // Measured over the window the chart shows, so the number and the
+        // picture beside it cannot disagree.
+        retention: retentionRate(daily),
+        dueNow: Number(totalsRows[0]?.due_now ?? 0),
+      },
+      streak: computeStreak(
+        dailyRows.map((row) => row.day),
+        today,
+      ),
+      daily,
+      forecast,
+      timezone,
+    };
+  }
+
+  /**
+   * The reader's timezone, falling back to UTC.
+   *
+   * Read from the profile rather than taken from a request header: a stats page
+   * that changed depending on which device it was opened on would not be a
+   * record of anything.
+   */
+  private async timezoneFor(em: EntityManager, userId: string): Promise<string> {
+    const rows = await em.getConnection().execute<Array<{ timezone: string }>>(
+      `select coalesce(p."timezone", 'UTC') as timezone
+         from "user_profile" p
+        where p."user_id" = ? and p."deleted_at" is null
+        limit 1`,
+      [userId],
+    );
+
+    return rows[0]?.timezone || "UTC";
+  }
+
+  /**
+   * Today's date in a timezone, asked of the database.
+   *
+   * One authority on what "today" means rather than two clocks that can
+   * disagree about midnight.
+   */
+  private async currentDay(
+    em: EntityManager,
+    timezone: string,
+  ): Promise<string> {
+    const rows = await em
+      .getConnection()
+      .execute<Array<{ day: string }>>(
+        `select (now() at time zone ?::text)::date::text as day`,
+        [timezone],
+      );
+
+    return rows[0]?.day ?? new Date().toISOString().slice(0, 10);
   }
 
   // ---------------------------------------------------------------------------
@@ -280,9 +473,11 @@ export class StudyService {
   }
 }
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isUuid(value: string): boolean {
-  return UUID_PATTERN.test(value);
+/** Shifts a `YYYY-MM-DD` date by whole days, in UTC so it cannot be affected by
+ *  the server's own timezone. */
+function shiftDay(day: string, delta: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
 }

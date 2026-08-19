@@ -91,3 +91,71 @@ export class ReviewResponseDTO {
   @ApiProperty() rating!: (typeof REVIEW_RATING)[keyof typeof REVIEW_RATING];
   @ApiProperty({ type: ReviewResultDTO }) scheduling!: ReviewResultDTO;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Overview — across every deck                                            */
+/* -------------------------------------------------------------------------- */
+
+export class ReviewDayDTO {
+  @ApiProperty({ example: "2026-09-24", description: "In the reader's timezone." })
+  day!: string;
+
+  @ApiProperty() reviews!: number;
+
+  @ApiProperty({ description: "Reviews that were not AGAIN." })
+  correct!: number;
+}
+
+export class ForecastDayDTO {
+  @ApiProperty({ example: "2026-09-25" }) day!: string;
+  @ApiProperty() due!: number;
+}
+
+export class OverviewTotalsDTO {
+  @ApiProperty({ description: "Reviews ever recorded." })
+  reviews!: number;
+
+  @ApiProperty({ description: "Active cards across all decks." })
+  activeCards!: number;
+
+  @ApiProperty({ description: "Active cards reviewed at least once." })
+  learnedCards!: number;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      "Share of reviews that were not AGAIN, over the window. Null until there is something to divide by — zero would claim the reader remembers nothing.",
+  })
+  retention!: number | null;
+
+  @ApiProperty({ description: "Cards in play right now, across every deck." })
+  dueNow!: number;
+}
+
+export class StudyOverviewDTO {
+  @ApiProperty({ type: OverviewTotalsDTO }) totals!: OverviewTotalsDTO;
+
+  @ApiProperty({
+    description: "Days up to today, or the day before, with at least one review.",
+  })
+  streak!: { current: number; longest: number };
+
+  @ApiProperty({
+    type: [ReviewDayDTO],
+    description: "One entry per day in the window, including days with none.",
+  })
+  daily!: ReviewDayDTO[];
+
+  @ApiProperty({
+    type: [ForecastDayDTO],
+    description: "What is coming due over the next fortnight.",
+  })
+  forecast!: ForecastDayDTO[];
+
+  @ApiProperty({
+    example: "Europe/London",
+    description:
+      "The timezone every day boundary above was computed in, so the client can label them without guessing.",
+  })
+  timezone!: string;
+}

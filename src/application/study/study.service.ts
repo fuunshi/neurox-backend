@@ -1,7 +1,10 @@
 import { CardResponseDTO } from "@/application/deck/dto/deck.dto";
 import { CARD_STATUS } from "@/common/constant/enums";
 import { isUuid } from "@/common/utils/validation/is-uuid.util";
-import { CardImproverService, type CardImprovement } from "./card-improver.service";
+import {
+  CardImproverService,
+  type CardImprovement,
+} from "./card-improver.service";
 import type { ReviewRating } from "@/common/constant/enums/review-rating.enum";
 import {
   buildPage,
@@ -213,14 +216,15 @@ export class StudyService {
     const timezone = await this.timezoneFor(this.em, userId);
     const today = await this.currentDay(this.em, timezone);
 
-    const [dailyRows, forecastRows, totalsRows, activeRows] = await Promise.all([
-      // Reviews per day over the window. Only days with reviews come back; the
-      // gaps are filled in code so the chart plots a continuous axis rather than
-      // compressing a quiet week into nothing.
-      this.em.getConnection().execute<
-        Array<{ day: string; reviews: number; correct: number }>
-      >(
-        `select (r."reviewed_at" at time zone ?::text)::date::text as day,
+    const [dailyRows, forecastRows, totalsRows, activeRows] = await Promise.all(
+      [
+        // Reviews per day over the window. Only days with reviews come back; the
+        // gaps are filled in code so the chart plots a continuous axis rather than
+        // compressing a quiet week into nothing.
+        this.em
+          .getConnection()
+          .execute<Array<{ day: string; reviews: number; correct: number }>>(
+            `select (r."reviewed_at" at time zone ?::text)::date::text as day,
                 count(*)::int as reviews,
                 count(*) filter (where r."rating" <> 'AGAIN')::int as correct
            from "card_review" r
@@ -228,11 +232,11 @@ export class StudyService {
             and r."reviewed_at" >= now() - interval '90 days'
           group by 1
           order by 1`,
-        [timezone, userId],
-      ),
+            [timezone, userId],
+          ),
 
-      this.em.getConnection().execute<Array<{ day: string; due: number }>>(
-        `select (c."due_at" at time zone ?::text)::date::text as day,
+        this.em.getConnection().execute<Array<{ day: string; due: number }>>(
+          `select (c."due_at" at time zone ?::text)::date::text as day,
                 count(*)::int as due
            from "flash_card" c
            join "deck" d on d."id" = c."deck_id"
@@ -245,13 +249,13 @@ export class StudyService {
             and c."due_at" < now() + interval '14 days'
           group by 1
           order by 1`,
-        [timezone, userId],
-      ),
+          [timezone, userId],
+        ),
 
-      this.em
-        .getConnection()
-        .execute<Array<{ reviews: number; due_now: number }>>(
-          `select
+        this.em
+          .getConnection()
+          .execute<Array<{ reviews: number; due_now: number }>>(
+            `select
              (select count(*)::int from "card_review" r where r."user_id" = ?) as reviews,
              (select count(*)::int
                 from "flash_card" c
@@ -261,20 +265,23 @@ export class StudyService {
                  and c."status" = 'ACTIVE'
                  and (c."due_at" is null or c."due_at" <= now() or c."interval_days" = 0)
              ) as due_now`,
-          [userId, userId],
-        ),
+            [userId, userId],
+          ),
 
-      this.em.getConnection().execute<Array<{ active: number; learned: number }>>(
-        `select count(*) filter (where c."status" = 'ACTIVE')::int as active,
+        this.em
+          .getConnection()
+          .execute<Array<{ active: number; learned: number }>>(
+            `select count(*) filter (where c."status" = 'ACTIVE')::int as active,
                 count(*) filter (
                   where c."status" = 'ACTIVE' and c."last_reviewed_at" is not null
                 )::int as learned
            from "flash_card" c
            join "deck" d on d."id" = c."deck_id"
           where d."user_id" = ? and d."deleted_at" is null and c."deleted_at" is null`,
-        [userId],
-      ),
-    ]);
+            [userId],
+          ),
+      ],
+    );
 
     const windowDays = 30;
     const from = shiftDay(today, -(windowDays - 1));
@@ -325,7 +332,10 @@ export class StudyService {
    * that changed depending on which device it was opened on would not be a
    * record of anything.
    */
-  private async timezoneFor(em: EntityManager, userId: string): Promise<string> {
+  private async timezoneFor(
+    em: EntityManager,
+    userId: string,
+  ): Promise<string> {
     const rows = await em.getConnection().execute<Array<{ timezone: string }>>(
       `select coalesce(p."timezone", 'UTC') as timezone
          from "user_profile" p
@@ -349,10 +359,9 @@ export class StudyService {
   ): Promise<string> {
     const rows = await em
       .getConnection()
-      .execute<Array<{ day: string }>>(
-        `select (now() at time zone ?::text)::date::text as day`,
-        [timezone],
-      );
+      .execute<
+        Array<{ day: string }>
+      >(`select (now() at time zone ?::text)::date::text as day`, [timezone]);
 
     return rows[0]?.day ?? new Date().toISOString().slice(0, 10);
   }
@@ -472,7 +481,6 @@ export class StudyService {
     return card;
   }
 }
-
 
 /** Shifts a `YYYY-MM-DD` date by whole days, in UTC so it cannot be affected by
  *  the server's own timezone. */

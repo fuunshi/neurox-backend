@@ -114,9 +114,7 @@ export function fillDays(
   let cursor = options.from;
   // Guard against a malformed range turning into an infinite loop.
   for (let i = 0; i < 400 && cursor <= options.to; i += 1) {
-    filled.push(
-      byDay.get(cursor) ?? { day: cursor, reviews: 0, correct: 0 },
-    );
+    filled.push(byDay.get(cursor) ?? { day: cursor, reviews: 0, correct: 0 });
     cursor = nextDay(cursor);
   }
 

@@ -1,5 +1,9 @@
 import { GeminiClient } from "@/integrations/gemini/gemini.client";
-import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 
 /**
  * Rewrites a card that is not working.

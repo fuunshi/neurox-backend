@@ -23,19 +23,13 @@ describe("computeStreak", () => {
   it("still counts a run that ended yesterday", () => {
     // At 9am, before studying, a streak that had already reset would be lying
     // about the day the reader is still in the middle of.
-    const streak = computeStreak(
-      ["2026-09-22", "2026-09-23"],
-      "2026-09-24",
-    );
+    const streak = computeStreak(["2026-09-22", "2026-09-23"], "2026-09-24");
 
     expect(streak.current).toBe(2);
   });
 
   it("breaks a run that ended two days ago", () => {
-    const streak = computeStreak(
-      ["2026-09-20", "2026-09-21"],
-      "2026-09-24",
-    );
+    const streak = computeStreak(["2026-09-20", "2026-09-21"], "2026-09-24");
 
     expect(streak.current).toBe(0);
     expect(streak.longest).toBe(2);
@@ -82,7 +76,9 @@ describe("retentionRate", () => {
     // Zero would read as "you remember nothing", which is a different and much
     // worse claim than "there is no data yet".
     expect(retentionRate([])).toBeNull();
-    expect(retentionRate([{ day: "2026-09-24", reviews: 0, correct: 0 }])).toBeNull();
+    expect(
+      retentionRate([{ day: "2026-09-24", reviews: 0, correct: 0 }]),
+    ).toBeNull();
   });
 
   it("is the share of reviews that were not AGAIN", () => {
@@ -103,10 +99,10 @@ describe("retentionRate", () => {
 
 describe("fillDays", () => {
   it("inserts the days with no reviews", () => {
-    const filled = fillDays(
-      [{ day: "2026-09-22", reviews: 5, correct: 4 }],
-      { from: "2026-09-21", to: "2026-09-24" },
-    );
+    const filled = fillDays([{ day: "2026-09-22", reviews: 5, correct: 4 }], {
+      from: "2026-09-21",
+      to: "2026-09-24",
+    });
 
     expect(filled.map((d) => d.day)).toEqual([
       "2026-09-21",

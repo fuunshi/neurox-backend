@@ -97,7 +97,10 @@ export class ReviewResponseDTO {
 /* -------------------------------------------------------------------------- */
 
 export class ReviewDayDTO {
-  @ApiProperty({ example: "2026-09-24", description: "In the reader's timezone." })
+  @ApiProperty({
+    example: "2026-09-24",
+    description: "In the reader's timezone.",
+  })
   day!: string;
 
   @ApiProperty() reviews!: number;
@@ -136,7 +139,8 @@ export class StudyOverviewDTO {
   @ApiProperty({ type: OverviewTotalsDTO }) totals!: OverviewTotalsDTO;
 
   @ApiProperty({
-    description: "Days up to today, or the day before, with at least one review.",
+    description:
+      "Days up to today, or the day before, with at least one review.",
   })
   streak!: { current: number; longest: number };
 

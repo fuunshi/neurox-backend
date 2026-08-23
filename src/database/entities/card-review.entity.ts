@@ -42,6 +42,22 @@ const CardReviewSchema = defineEntity({
     intervalAfterDays: p.integer().fieldName("interval_after_days").default(0),
     /** Ease after this review, ×100 — see the note on `FlashCard.easeFactor`. */
     easeAfter: p.integer().fieldName("ease_after").default(250),
+
+    /**
+     * The card's complete scheduling state immediately before this review.
+     *
+     * Stored whole so a mis-clicked grade can be undone exactly, rather than
+     * approximated by running the algorithm backwards — which would need every
+     * branch of it inverted, and would be wrong the moment the algorithm
+     * changes. JSON rather than six more columns: nothing queries these, they
+     * are only ever read back in full, and a scheduling change later should not
+     * require a migration per field.
+     *
+     * Null on rows written before undo existed, which is why undo refuses those
+     * rather than guessing.
+     */
+    previousState: p.json().fieldName("previous_state").nullable(),
+
     reviewedAt: p
       .datetime()
       .fieldName("reviewed_at")

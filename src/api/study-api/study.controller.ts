@@ -119,4 +119,22 @@ export class StudyController {
   ): Promise<CardImprovementDTO> {
     return this.studyService.improveCard(req.authContext.user.id, id);
   }
+
+  @Post("cards/:id/review/undo")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Reverse the most recent review of a card",
+    description:
+      "For a mis-clicked grade. Restores the card's previous schedule exactly " +
+      "and removes the review. Only the latest review can be undone — undoing an " +
+      "older one would leave every review after it describing a schedule that no " +
+      "longer exists.",
+  })
+  @ApiResponse({ status: 200, description: "{ reverted: true, dueAt }" })
+  async undoReview(
+    @Req() req: AuthenticatedRequest,
+    @Param("id") id: string,
+  ): Promise<{ reverted: true; dueAt: Date | null }> {
+    return this.studyService.undoLastReview(req.authContext.user.id, id);
+  }
 }

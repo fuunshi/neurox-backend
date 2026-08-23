@@ -5,6 +5,13 @@ import {
   ENTITY_TYPES,
 } from "@/common/constant/activity";
 import { CARD_STATUS } from "@/common/constant/enums";
+import {
+  contentTypeFor,
+  delimiterFor,
+  exportFilename,
+  toDelimited,
+  type ExportFormat,
+} from "./export";
 import { EASE } from "@/application/study/scheduling";
 import {
   buildPage,
@@ -126,6 +133,45 @@ export class DeckService {
    * its deck, so leaving them active would make them unreachable but still
    * countable.
    */
+  /**
+   * Every card in a deck, as text.
+   *
+   * Loaded through a cursor-free find rather than the paginated list: an export
+   * that silently stopped at fifty cards would be worse than no export, because
+   * the reader would not know to check.
+   */
+  async exportDeck(
+    userId: string,
+    deckId: string,
+    format: ExportFormat,
+  ): Promise<{ filename: string; body: string; contentType: string }> {
+    const deck = await this.findOwnedDeck(userId, deckId);
+
+    const cards = await this.em.find(
+      FlashCard,
+      { deck: deck.id },
+      { orderBy: { createdAt: "asc", id: "asc" } },
+    );
+
+    return {
+      filename: exportFilename(deck.title, format),
+      body: toDelimited(
+        cards.map((card) => ({
+          front: card.front,
+          back: card.back,
+          hint: card.hint ?? null,
+          status: card.status,
+          dueAt: card.dueAt ?? null,
+          intervalDays: card.intervalDays,
+          lapses: card.lapses,
+          createdAt: card.createdAt,
+        })),
+        delimiterFor(format),
+      ),
+      contentType: contentTypeFor(format),
+    };
+  }
+
   async deleteDeck(userId: string, deckId: string): Promise<void> {
     const deck = await this.findOwnedDeck(userId, deckId);
     const deletedAt = new Date();

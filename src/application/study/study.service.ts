@@ -15,6 +15,7 @@ import { CardReview, Deck, FlashCard, User } from "@/database/entities";
 import { EntityManager, QueryOrder } from "@mikro-orm/postgresql";
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -26,6 +27,13 @@ import {
   STUDY_INCLUDE,
 } from "./dto/study.dto";
 import { schedule, type SchedulingState } from "./scheduling";
+
+/** The stored snapshot: the scheduling state plus the two timestamps undo must
+ *  restore. ISO strings because it round-trips through JSON. */
+interface PreviousSchedulingState extends SchedulingState {
+  dueAt: string | null;
+  lastReviewedAt: string | null;
+}
 import { computeStreak, fillDays, retentionRate } from "./stats";
 
 /**
@@ -137,6 +145,19 @@ export class StudyService {
     const now = new Date();
     const scheduled = schedule(before, rating, now);
 
+    // Captured whole, before anything is written, so `undoLastReview` can put
+    // the card back exactly rather than running the algorithm backwards.
+    const previousState: PreviousSchedulingState = {
+      intervalDays: card.intervalDays,
+      easeFactor: card.easeFactor,
+      repetitions: card.repetitions,
+      lapses: card.lapses,
+      dueAt: card.dueAt ? card.dueAt.toISOString() : null,
+      lastReviewedAt: card.lastReviewedAt
+        ? card.lastReviewedAt.toISOString()
+        : null,
+    };
+
     card.intervalDays = scheduled.intervalDays;
     card.easeFactor = scheduled.easeFactor;
     card.repetitions = scheduled.repetitions;
@@ -151,6 +172,7 @@ export class StudyService {
       intervalBeforeDays: scheduled.intervalBeforeDays,
       intervalAfterDays: scheduled.intervalDays,
       easeAfter: scheduled.easeFactor,
+      previousState,
       reviewedAt: now,
     });
 
@@ -192,6 +214,76 @@ export class StudyService {
       lapses: card.lapses,
       sourceTitle: null,
     });
+  }
+
+  /**
+   * Reverses the most recent review of a card.
+   *
+   * **Only the latest review of the card is ever touched, and that is what makes
+   * it sound.** The stored prior state is restored verbatim, which is exactly
+   * right when nothing has run since. Skipping back to an older review would
+   * leave every review after it describing a schedule that no longer exists, so
+   * the endpoint cannot address one — it always takes the newest.
+   *
+   * Undoing repeatedly therefore walks *backwards* through the card's history,
+   * one review at a time. Each step is still "reverse the latest review", so the
+   * invariant holds at every step; what it cannot do is jump.
+   *
+   * The review row is **deleted**, not marked undone. A mis-clicked grade is not
+   * a review that happened — it is one that did not. The alternative, keeping the
+   * row and filtering it out everywhere, means every statistics query needs to
+   * remember a predicate, and one omission silently corrupts the numbers on the
+   * page whose whole job is to be a record.
+   */
+  async undoLastReview(
+    userId: string,
+    cardId: string,
+  ): Promise<{ reverted: true; dueAt: Date | null }> {
+    const card = await this.findOwnedCard(this.em, userId, cardId);
+
+    const latest = await this.em.findOne(
+      CardReview,
+      { card: card.id },
+      { orderBy: { reviewedAt: "desc" } },
+    );
+
+    if (!latest) {
+      throw new NotFoundException("This card has not been reviewed yet.");
+    }
+
+    if (latest.user.id !== userId) {
+      // Cards belong to one reader, so this should be unreachable — but the
+      // restore would be wrong if it ever were not.
+      throw new NotFoundException("This card has not been reviewed yet.");
+    }
+
+    const previous = latest.previousState as PreviousSchedulingState | null;
+
+    if (!previous) {
+      // Rows written before `previous_state` existed. Refused rather than
+      // guessed at: reconstructing the prior schedule would mean running the
+      // algorithm backwards, which is wrong in exactly the cases where it
+      // matters.
+      throw new ConflictException(
+        "That review is too old to undo. Earlier reviews cannot be reversed.",
+      );
+    }
+
+    card.intervalDays = previous.intervalDays;
+    card.easeFactor = previous.easeFactor;
+    card.repetitions = previous.repetitions;
+    card.lapses = previous.lapses;
+    card.dueAt = previous.dueAt ? new Date(previous.dueAt) : null;
+    card.lastReviewedAt = previous.lastReviewedAt
+      ? new Date(previous.lastReviewedAt)
+      : null;
+
+    this.em.remove(latest);
+    await this.em.flush();
+
+    this.logger.log(`Undid the last review of card ${card.id}`);
+
+    return { reverted: true, dueAt: card.dueAt };
   }
 
   /** Counts for one deck, for the deck screen and the study header. */

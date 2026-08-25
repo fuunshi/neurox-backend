@@ -12,6 +12,7 @@ export const ENTITY_TYPES = {
   FLASH_CARD: "FLASH_CARD",
   SOURCE: "SOURCE",
   GENERATION_JOB: "GENERATION_JOB",
+  QUIZ_ATTEMPT: "QUIZ_ATTEMPT",
 } as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES];

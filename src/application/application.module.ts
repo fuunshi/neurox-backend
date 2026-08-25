@@ -4,6 +4,8 @@ import { ActivitiesApplicationModule } from "./activities/activities.module";
 import { AuthApplicationModule } from "./auth/auth.module";
 import { DeckApplicationModule } from "./deck/deck.module";
 import { GenerationApplicationModule } from "./generation/generation.module";
+import { GraphApplicationModule } from "./graph/graph.module";
+import { QuizApplicationModule } from "./quiz/quiz.module";
 import { SourceApplicationModule } from "./source/source.module";
 import { StudyApplicationModule } from "./study/study.module";
 import { UserApplicationModule } from "./user/user.module";
@@ -23,6 +25,8 @@ import { UserApplicationModule } from "./user/user.module";
     DeckApplicationModule,
     SourceApplicationModule,
     GenerationApplicationModule,
+    GraphApplicationModule,
+    QuizApplicationModule,
     StudyApplicationModule,
   ],
   exports: [
@@ -33,6 +37,8 @@ import { UserApplicationModule } from "./user/user.module";
     DeckApplicationModule,
     SourceApplicationModule,
     GenerationApplicationModule,
+    GraphApplicationModule,
+    QuizApplicationModule,
     StudyApplicationModule,
   ],
 })

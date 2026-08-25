@@ -6,6 +6,8 @@ export * from "./deck.entity";
 export * from "./flash-card.entity";
 export * from "./generation-job.entity";
 export * from "./login-history.entity";
+export * from "./quiz-answer.entity";
+export * from "./quiz-attempt.entity";
 export * from "./request-log.entity";
 export * from "./source.entity";
 export * from "./token.entity";
@@ -20,6 +22,8 @@ import { Deck } from "./deck.entity";
 import { FlashCard } from "./flash-card.entity";
 import { GenerationJob } from "./generation-job.entity";
 import { LoginHistory } from "./login-history.entity";
+import { QuizAnswer } from "./quiz-answer.entity";
+import { QuizAttempt } from "./quiz-attempt.entity";
 import { RequestLog } from "./request-log.entity";
 import { Source } from "./source.entity";
 import { Token } from "./token.entity";
@@ -41,4 +45,6 @@ export const ENTITIES = [
   Source,
   GenerationJob,
   CardReview,
+  QuizAttempt,
+  QuizAnswer,
 ];

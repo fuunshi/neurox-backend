@@ -2320,6 +2320,531 @@
       "comment": null
     },
     {
+      "name": "quiz_answer",
+      "schema": "public",
+      "columns": {
+        "answered_at": {
+          "name": "answered_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "attempt_id": {
+          "name": "attempt_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "card_id": {
+          "name": "card_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "chosen": {
+          "name": "chosen",
+          "type": "varchar(255)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 255,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "string"
+        },
+        "correct": {
+          "name": "correct",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "false",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "boolean"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "position": {
+          "name": "position",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "attempt_id",
+            "position"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "quiz_answer_attempt_id_position_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "attempt_id",
+            "position"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "quiz_answer_attempt_id_position_unique",
+          "primary": false,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "card_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "quiz_answer_card_id_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "quiz_answer_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "user_id",
+            "answered_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "quiz_answer_user_id_answered_at_index",
+          "primary": false,
+          "unique": false
+        }
+      ],
+      "checks": [],
+      "triggers": [],
+      "foreignKeys": {
+        "quiz_answer_attempt_id_foreign": {
+          "columnNames": [
+            "attempt_id"
+          ],
+          "constraintName": "quiz_answer_attempt_id_foreign",
+          "localTableName": "public.quiz_answer",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.quiz_attempt"
+        },
+        "quiz_answer_card_id_foreign": {
+          "columnNames": [
+            "card_id"
+          ],
+          "constraintName": "quiz_answer_card_id_foreign",
+          "localTableName": "public.quiz_answer",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.flash_card",
+          "deleteRule": "set null"
+        },
+        "quiz_answer_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "quiz_answer_user_id_foreign",
+          "localTableName": "public.quiz_answer",
+          "referencedColumnNames": [
+            "user_id"
+          ],
+          "referencedTableName": "public.user"
+        }
+      },
+      "comment": null
+    },
+    {
+      "name": "quiz_attempt",
+      "schema": "public",
+      "columns": {
+        "correct_count": {
+          "name": "correct_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "deck_id": {
+          "name": "deck_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "format": {
+          "name": "format",
+          "type": "quiz_format",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "MULTIPLE_CHOICE",
+            "CLOZE",
+            "MATCHING"
+          ],
+          "mappedType": "enum",
+          "nativeEnumName": "quiz_format"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "question_count": {
+          "name": "question_count",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "questions": {
+          "name": "questions",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "status": {
+          "name": "status",
+          "type": "quiz_attempt_status",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'IN_PROGRESS'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [
+            "IN_PROGRESS",
+            "COMPLETED"
+          ],
+          "mappedType": "enum",
+          "nativeEnumName": "quiz_attempt_status"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "deck_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "quiz_attempt_deck_id_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "quiz_attempt_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "user_id"
+          ],
+          "composite": false,
+          "constraint": false,
+          "keyName": "quiz_attempt_user_id_index",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "user_id",
+            "started_at"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "quiz_attempt_user_id_started_at_index",
+          "primary": false,
+          "unique": false
+        }
+      ],
+      "checks": [],
+      "triggers": [],
+      "foreignKeys": {
+        "quiz_attempt_deck_id_foreign": {
+          "columnNames": [
+            "deck_id"
+          ],
+          "constraintName": "quiz_attempt_deck_id_foreign",
+          "localTableName": "public.quiz_attempt",
+          "referencedColumnNames": [
+            "id"
+          ],
+          "referencedTableName": "public.deck"
+        },
+        "quiz_attempt_user_id_foreign": {
+          "columnNames": [
+            "user_id"
+          ],
+          "constraintName": "quiz_attempt_user_id_foreign",
+          "localTableName": "public.quiz_attempt",
+          "referencedColumnNames": [
+            "user_id"
+          ],
+          "referencedTableName": "public.user"
+        }
+      },
+      "comment": null
+    },
+    {
       "name": "request_log",
       "schema": "public",
       "columns": {
@@ -4458,6 +4983,23 @@
         "SUCCEEDED",
         "FAILED",
         "CANCELLED"
+      ]
+    },
+    "quiz_attempt_status": {
+      "name": "quiz_attempt_status",
+      "schema": "public",
+      "items": [
+        "IN_PROGRESS",
+        "COMPLETED"
+      ]
+    },
+    "quiz_format": {
+      "name": "quiz_format",
+      "schema": "public",
+      "items": [
+        "MULTIPLE_CHOICE",
+        "CLOZE",
+        "MATCHING"
       ]
     },
     "review_rating": {

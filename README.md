@@ -19,6 +19,23 @@ Requires PostgreSQL and Redis. Configuration is read from `.env` / `.env.local`;
 `.env.template` documents every key. `JWT_SECRET`, `DATABASE_URL` and
 `TOKEN_HASH_SECRET` are **required** — the app refuses to start without them.
 
+### A demo account with a past
+
+```bash
+pnpm run seed
+```
+
+Creates `admin@neurox.ai` / `demo_admin@123` with five decks, four sources and
+two months of review history, so every screen — streak, retention, forecast,
+quiz history, the knowledge map — opens on real data rather than on empty
+states. Run it whenever a fresh one is wanted: it deletes the demo account's own
+data first, so it is safe to repeat and always leaves the same account. It
+touches no other user's rows.
+
+The history is produced by replaying the app's own scheduling function rather
+than by writing plausible-looking intervals, so the streak, the retention figure
+and the forecast all agree with the cards they describe.
+
 ## Layered structure
 
 | Path | Contains |

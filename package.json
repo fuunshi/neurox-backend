@@ -36,7 +36,8 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --no-file-parallelism",
     "test:e2e": "vitest run --config vitest.e2e.config.mts",
-    "prepare": "node -e \"if (!process.env.CI) process.exit(0)\" && husky"
+    "prepare": "node -e \"if (!process.env.CI) process.exit(0)\" && husky",
+    "seed": "nest start --entryFile seeder/seed"
   },
   "dependencies": {
     "@fastify/compress": "^9.2.0",

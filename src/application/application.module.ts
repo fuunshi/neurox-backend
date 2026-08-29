@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AccountApplicationModule } from "./account/account.module";
 import { ActivitiesApplicationModule } from "./activities/activities.module";
+import { AnalyticsApplicationModule } from "./analytics/analytics.module";
 import { AuthApplicationModule } from "./auth/auth.module";
 import { DeckApplicationModule } from "./deck/deck.module";
 import { GenerationApplicationModule } from "./generation/generation.module";
@@ -28,6 +29,7 @@ import { UserApplicationModule } from "./user/user.module";
     GraphApplicationModule,
     QuizApplicationModule,
     StudyApplicationModule,
+    AnalyticsApplicationModule,
   ],
   exports: [
     AuthApplicationModule,
@@ -40,6 +42,7 @@ import { UserApplicationModule } from "./user/user.module";
     GraphApplicationModule,
     QuizApplicationModule,
     StudyApplicationModule,
+    AnalyticsApplicationModule,
   ],
 })
 export class ApplicationModule {}

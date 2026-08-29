@@ -1,5 +1,6 @@
 import { CardResponseDTO } from "@/application/deck/dto/deck.dto";
 import { CARD_STATUS } from "@/common/constant/enums";
+import { userTimezone } from "@/common/utils/timezone/user-timezone.util";
 import { isUuid } from "@/common/utils/validation/is-uuid.util";
 import {
   CardImproverService,
@@ -305,7 +306,7 @@ export class StudyService {
    * arbitrary hour is worse than no streak.
    */
   async getOverview(userId: string): Promise<StudyOverviewDTO> {
-    const timezone = await this.timezoneFor(this.em, userId);
+    const timezone = await userTimezone(this.em, userId);
     const today = await this.currentDay(this.em, timezone);
 
     const [dailyRows, forecastRows, totalsRows, activeRows] = await Promise.all(
@@ -415,28 +416,6 @@ export class StudyService {
       forecast,
       timezone,
     };
-  }
-
-  /**
-   * The reader's timezone, falling back to UTC.
-   *
-   * Read from the profile rather than taken from a request header: a stats page
-   * that changed depending on which device it was opened on would not be a
-   * record of anything.
-   */
-  private async timezoneFor(
-    em: EntityManager,
-    userId: string,
-  ): Promise<string> {
-    const rows = await em.getConnection().execute<Array<{ timezone: string }>>(
-      `select coalesce(p."timezone", 'UTC') as timezone
-         from "user_profile" p
-        where p."user_id" = ? and p."deleted_at" is null
-        limit 1`,
-      [userId],
-    );
-
-    return rows[0]?.timezone || "UTC";
   }
 
   /**

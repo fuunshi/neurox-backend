@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ActivitiesApiModule } from "./activities-api/activities-api.module";
+import { AnalyticsApiModule } from "./analytics-api/analytics-api.module";
 import { AuthApiModule } from "./auth-api/auth-api.module";
 import { DeckApiModule } from "./deck-api/deck-api.module";
 import { GenerationApiModule } from "./generation-api/generation-api.module";
@@ -25,6 +26,7 @@ import { UserApiModule } from "./user-api/user-api.module";
     GraphApiModule,
     QuizApiModule,
     StudyApiModule,
+    AnalyticsApiModule,
   ],
 })
 export class ApiModule {}

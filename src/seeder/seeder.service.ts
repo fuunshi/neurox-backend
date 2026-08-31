@@ -107,10 +107,38 @@ function pickRating(strength: number, random: () => number): ReviewRating {
   return REVIEW_RATING.GOOD;
 }
 
-/** Nine in the morning, which is a plausible hour to be studying. */
-function morningOf(date: Date): Date {
+/**
+ * When the reader sat down that day.
+ *
+ * A session is anchored at a plausible hour rather than the same one every
+ * time. Pinning every review to nine in the morning makes the "when do you
+ * study" chart a single bar — a demo showing the generator rather than the
+ * reader. Mornings, the occasional lunchtime, and evenings are the three
+ * windows most studying actually falls into, weighted the way a week tends to
+ * go: mornings most often, evenings a close second.
+ *
+ * Drawn from the seeded source like everything else here, so two runs still
+ * produce the same account.
+ */
+/** Midnight, so a day-by-day walk advances by whole days and not by an hour. */
+function startOfDay(date: Date): Date {
   const copy = new Date(date);
-  copy.setHours(9, 0, 0, 0);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function sessionStartOf(date: Date, random: () => number): Date {
+  const copy = new Date(date);
+  const window = random();
+
+  const hour =
+    window < 0.4
+      ? 7 + Math.floor(random() * 3) // 7–9am
+      : window < 0.55
+        ? 12 + Math.floor(random() * 2) // lunchtime
+        : 20 + Math.floor(random() * 4); // 8–11pm
+
+  copy.setHours(hour, Math.floor(random() * 30), 0, 0);
   return copy;
 }
 
@@ -471,13 +499,21 @@ export class SeederService {
     );
 
     for (
-      let day = morningOf(new Date(earliest));
-      day <= now;
-      day = this.daysAfter(day, 1)
+      let cursor = startOfDay(new Date(earliest));
+      cursor <= now;
+      cursor = this.daysAfter(cursor, 1)
     ) {
       // Not every day is a study day. A history with no gaps reads as machine
       // output and flattens the activity chart into a solid block.
       if (random() < 0.22) continue;
+
+      // Drawn per day rather than carried by the loop variable, which would
+      // put every session of the last two months at the same minute.
+      const day = sessionStartOf(cursor, random);
+
+      // A session that has not happened yet is not a session. Without this the
+      // last day of the walk can be planned for this evening.
+      if (day > now) continue;
 
       for (const card of allCards) {
         const dueAt = due.get(card.id);
@@ -517,7 +553,12 @@ export class SeederService {
      * actually happened in.
      */
     for (let back = 6; back >= 0; back -= 1) {
-      const day = morningOf(this.daysBefore(now, back));
+      const day = sessionStartOf(this.daysBefore(now, back), random);
+
+      // Same reason as above: a session drawn for this evening has not happened
+      // yet, and a review recorded in the future would be a lie the schedule
+      // then has to carry.
+      if (day > now) continue;
 
       if (
         planned.some(

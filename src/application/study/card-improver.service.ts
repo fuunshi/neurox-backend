@@ -79,7 +79,7 @@ export class CardImproverService {
 
     const result = await this.gemini.generateJson<ImprovementPayload>({
       prompt: this.buildPrompt(input),
-      responseSchema: RESPONSE_SCHEMA as unknown as Record<string, unknown>,
+      responseSchema: RESPONSE_SCHEMA,
       // Lower than generation: this is a rewrite of given text, not an act of
       // invention, and a wandering model produces a different card rather than a
       // better one.

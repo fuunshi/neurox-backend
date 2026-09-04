@@ -1,12 +1,6 @@
 import { UserWithToken } from "@/application/user/user.type";
 import { ApiProperty } from "@nestjs/swagger";
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsStrongPassword,
-  IsString,
-  IsEnum,
-} from "class-validator";
+import { IsEmail, IsNotEmpty, IsString, IsEnum } from "class-validator";
 
 export enum LoginStep {
   UPDATE_PASSWORD = "UPDATE_PASSWORD",

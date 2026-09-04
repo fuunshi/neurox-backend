@@ -55,7 +55,7 @@ export class AuditService {
         await em.flush();
       }
     } catch (error) {
-      this.logger.error(`Failed to create audit log: ${error}`);
+      this.logger.error(`Failed to create audit log: ${String(error)}`);
     }
   }
 

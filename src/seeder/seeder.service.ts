@@ -305,7 +305,7 @@ export class SeederService {
   private async createSources(user: User, now: Date): Promise<Source[]> {
     const created: Source[] = [];
 
-    DEMO_SOURCES.forEach((demo, index) => {
+    DEMO_SOURCES.forEach((demo) => {
       created.push(
         this.fork.create(Source, {
           user,

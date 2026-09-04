@@ -1,10 +1,21 @@
 import { Module, Global } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { BullModule } from "@nestjs/bullmq";
-import { ExampleProcessor } from "./processors/example.processor";
-import { ACCOUNT_QUEUE_NAME, GENERATION_QUEUE_NAME } from "./queue.constants";
-import { QueueService } from "./queue.service";
+import {
+  ACCOUNT_QUEUE_NAME,
+  GENERATION_QUEUE_NAME,
+  MAINTENANCE_QUEUE_NAME,
+} from "./queue.constants";
 
+/**
+ * BullMQ root configuration, shared by both entrypoints.
+ *
+ * The mail queue is not registered here: `MailQueueModule` owns it, along with
+ * the connection options and the service that enqueues to it. Registering it
+ * again under the literal `"mail"` produced a second Queue instance for the same
+ * queue name, and the two would have drifted apart the moment one connection
+ * config changed.
+ */
 @Global()
 @Module({
   imports: [
@@ -23,20 +34,16 @@ import { QueueService } from "./queue.service";
     }),
     BullModule.registerQueue(
       {
-        name: "example",
-      },
-      {
-        name: "mail",
-      },
-      {
         name: ACCOUNT_QUEUE_NAME,
       },
       {
         name: GENERATION_QUEUE_NAME,
       },
+      {
+        name: MAINTENANCE_QUEUE_NAME,
+      },
     ),
   ],
-  providers: [ExampleProcessor, QueueService],
-  exports: [QueueService, BullModule],
+  exports: [BullModule],
 })
 export class QueueModule {}

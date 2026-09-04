@@ -1,5 +1,4 @@
 import { ActivityRecorderService } from "@/application/activities/activity-recorder.service";
-import { isUuid } from "@/common/utils/validation/is-uuid.util";
 import { ChunkingService } from "@/application/source/chunking.service";
 import {
   ACTIVITY_TYPES,

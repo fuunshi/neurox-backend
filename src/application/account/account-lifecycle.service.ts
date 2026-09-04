@@ -1,5 +1,6 @@
 import { SETTING_KEYS } from "@/common/constant/settings.constant";
 import { SettingsService } from "@/infra/settings/settings.service";
+import { TokenService } from "@/infra/token/token.service";
 import { User } from "@/database/entities";
 import { EntityManager } from "@mikro-orm/postgresql";
 import { Injectable, Logger, UnauthorizedException } from "@nestjs/common";
@@ -23,6 +24,7 @@ export class AccountLifecycleService {
   constructor(
     private readonly em: EntityManager,
     private readonly settings: SettingsService,
+    private readonly tokens: TokenService,
   ) {}
 
   private async graceMs(): Promise<number> {
@@ -45,6 +47,65 @@ export class AccountLifecycleService {
       user.deletedAt.getTime() + (await this.graceMs()),
     );
     return deadline.getTime() > Date.now() ? deadline : null;
+  }
+
+  /**
+   * Soft-delete an account and start its recovery window.
+   *
+   * This is the entry point the rest of the lifecycle was missing: everything
+   * below — the grace period, `recover()`, the recycling cron, the
+   * `ACCOUNT_RECOVERABLE` conflict on register — reads `deletedAt`, and until
+   * now nothing ever set it.
+   *
+   * The password is required even though the caller is already authenticated.
+   * A borrowed session must not be able to end someone's account, and unlike
+   * changing a password this is not undone by signing in again — it starts a
+   * clock.
+   *
+   * Every session is revoked. Leaving refresh tokens alive would let the
+   * account keep being used after it was deleted, which is not what an
+   * authenticated request just asked for.
+   */
+  async remove(
+    userId: string,
+    password: string,
+  ): Promise<{ recoverableUntil: Date }> {
+    const user = await this.em.findOne(
+      User,
+      { id: userId },
+      { populate: ["profile"] },
+    );
+
+    if (!user) {
+      throw new UnauthorizedException("No such account.");
+    }
+
+    const passwordMatches = await bcrypt.compare(password, user.password);
+    if (!passwordMatches) {
+      throw new UnauthorizedException("Invalid credentials.");
+    }
+
+    const deletedAt = new Date();
+    user.deletedAt = deletedAt;
+    // The profile is soft-deleted with the user, and `recover()` restores both.
+    // Deleting one without the other would leave a live profile attached to a
+    // deleted account.
+    if (user.profile) {
+      user.profile.deletedAt = deletedAt;
+    }
+
+    await this.em.flush();
+    await this.tokens.revokeAllUserTokens(userId, "Account deleted");
+
+    const recoverableUntil = new Date(
+      deletedAt.getTime() + (await this.graceMs()),
+    );
+
+    this.logger.log(
+      `Account ${userId} soft-deleted; recoverable until ${recoverableUntil.toISOString()}.`,
+    );
+
+    return { recoverableUntil };
   }
 
   /**

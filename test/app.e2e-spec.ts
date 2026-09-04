@@ -1,6 +1,7 @@
 import { AppModule } from "@/app.module";
 import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
+import { Server } from "http";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -14,7 +15,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * `getOrThrow`, so a missing one fails here rather than at first use.
  */
 describe("AppModule (e2e)", () => {
-  let app: INestApplication;
+  // `getHttpServer()` is `any` unless the app is typed over its server, and
+  // supertest wants something it recognises.
+  let app: INestApplication<Server>;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({

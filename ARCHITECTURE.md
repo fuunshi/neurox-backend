@@ -11,7 +11,7 @@ Source of truth for how this backend is structured, named, and organized. Claude
 | Area | Choice | Notes |
 | --- | --- | --- |
 | Runtime | Node 22 (`node:22-alpine`), TypeScript 6 | `strictNullChecks` on, `noImplicitAny` off |
-| Framework | NestJS 11 | Two composition roots (see §2) |
+| Framework | NestJS 12 | Two composition roots (see §2) |
 | HTTP | Fastify 5 (`@nestjs/platform-fastify`) | `@fastify/compress`, `@fastify/helmet` registered in `main.ts` |
 | API docs | `@nestjs/swagger` | Served at `/api/docs`, bearer auth configured. **Requires `@fastify/static`** — it is loaded dynamically by `SwaggerModule.setup()`, so it has no import statement and is easy to prune by mistake. |
 | Database | PostgreSQL 16 + **MikroORM 7** | `defineEntity` API — v7 removed decorators. UUID PKs rely on a `gen_random_uuid()` DB default. |
@@ -20,7 +20,7 @@ Source of truth for how this backend is structured, named, and organized. Claude
 | Auth | `@nestjs/jwt`, bcryptjs (hashing), speakeasy (TOTP), qrcode (MFA QR) | JWT is stateless for access; refresh/reset tokens stored in `token` table |
 | Validation | class-validator + class-transformer | Global `ValidationPipe`: `transform`, `whitelist`, `forbidNonWhitelisted` |
 | Logging | `AppLoggerService` (`src/infra/logger`) | pino-based; slow-query reporting comes from MikroORM's logger config |
-| Tooling | pnpm, ESLint 10 (flat) + Prettier, Jest 30 + ts-jest, Husky, Docker multi-stage | `pnpm-workspace.yaml` pins allowed build scripts |
+| Tooling | pnpm, ESLint 10 (flat) + Prettier, Vitest 5, Husky, Docker multi-stage | `pnpm-workspace.yaml` pins allowed build scripts. Line endings are LF repo-wide (`.gitattributes`), which is what Prettier expects — see §12. |
 
 There is no authorization framework. Roles are carried on the JWT but nothing enforces them — see §7.
 
@@ -75,6 +75,12 @@ src/
       <feature>.module.ts          providers + exports (<Feature>ApplicationModule)
       dto/                         class-validator DTOs (currently duplicated in api/)
       interfaces/                  response shapes returned to controllers
+  realtime/                The authenticated socket — API process only (§15)
+    realtime.gateway.ts          @WebSocketGateway on /realtime: handshake, rooms, subscribe
+    realtime.ticket.ts           mints and verifies the one-shot REALTIME ticket
+    realtime.topics.ts           the topic registry and who may subscribe to what
+    realtime.service.ts          the only thing producers use to reach a socket
+    realtime.types.ts            event names; realtime.payloads.ts holds payload shapes
   database/                Data layer
     database.module.ts     MikroORM root module (MikroOrmModule.forRootAsync)
     entities/*.entity.ts   one file per entity, defined with `defineEntity`
@@ -183,6 +189,8 @@ application service
 - Templates are `.mjml.hbs` files under `templates/emails/<domain>/` with shared partials in `templates/partials/`. `nest-cli.json` copies `infra/mail-templates/templates/**/*.hbs` into `dist` — a new template directory must match that glob or production builds will miss the file.
 - Dev mail is captured by Mailpit: SMTP `localhost:1025`, UI `http://localhost:8025`.
 - The `account` queue carries a cron-scheduled job (default `0 3 * * *`, `ACCOUNT_RECYCLE_CRON`) that releases the email addresses of accounts past their recovery grace period. The schedule is env-configured; the grace period itself is an admin-editable row (§9).
+- The `maintenance` queue carries a cron-scheduled job (default `17 4 * * *`, `MAINTENANCE_CRON`) that prunes expired `token` rows and `request_log` rows past their retention window. It is its own queue rather than a second job on `account` so a large delete cannot delay the recycling cron. `request_log` gains a row per request and nothing else bounds it, so this job is what keeps it finite — disabling the worker long-term means that table grows without limit. Both retention windows are admin-editable rows (§9); the cron itself is env-configured.
+- `maintenance` is **worker-only**: the API process enqueues nothing onto it. Because it is registered in `QueueModule`, the repeatable schedule is registered by whichever runtime starts the scheduler, and only the worker hosts the processor — so if the worker is not running, the job is queued and never consumed rather than lost.
 
 ## 9. Data layer rules
 
@@ -243,10 +251,12 @@ Code style is Prettier-owned (double quotes, semicolons, 2-space indent, `printW
 
 ## 12. Testing
 
-- Unit specs are colocated: `*.spec.ts` next to the source file. Jest `rootDir` is `src`, `testRegex` `.*\.spec\.ts$`, path aliases mapped in `jest.config.js`.
+- Runner is **Vitest 5**, configured in `vitest.config.mts` (unit) and `vitest.e2e.config.mts` (e2e). There is no Jest dependency and no `jest.config.js`; the path aliases live in the two Vitest configs.
+- Unit specs are colocated: `*.spec.ts` next to the source file.
 - Standard unit setup: `Test.createTestingModule({ controllers/providers })` with `{ provide: X, useValue: mock }` — see `src/app.controller.spec.ts`.
-- E2E specs live in `test/*.e2e-spec.ts` (config `test/jest-e2e.json`, run with `pnpm run test:e2e`); they boot the real `AppModule`, so Postgres/Redis must be reachable.
-- **[CONFIRM]** Coverage is effectively zero (one spec exists, and it asserts a mock rather than the service). If tests are expected before merge, say so here — the pre-push hook only builds, it does not test.
+- E2E specs live in `test/*.e2e-spec.ts`, run with `pnpm run test:e2e`; they boot the real `AppModule`, so Postgres/Redis must be reachable. CI does **not** run them — it has no services, so `test:e2e` is a local-only gate.
+- Coverage is real but narrow: it is concentrated in pure functions (scheduling, stats, chunking, export escaping, quiz questions, analytics). The auth, MFA, generation, graph and card services have no specs, and neither does anything under `src/infra`, `src/worker`, `src/api` or `src/database`.
+- **Line endings matter here.** Prettier's default is LF. With `core.autocrlf=true` and no `.gitattributes`, every line of every file is a `prettier/prettier` violation and `pnpm run lint` (which passes `--fix`) rewrites the whole tree. `.gitattributes` now pins `eol=lf`; an existing CRLF working copy needs a re-checkout to benefit.
 - **Compiling is not evidence of working.** The MikroORM migration produced two bugs that passed `tsc`, `nest build` and review: missing UUID generation, and a missing `driver` option that broke every DI lookup. Verify against a running app and a real database.
 
 ## 13. Build, deploy, CI
@@ -260,11 +270,72 @@ Code style is Prettier-owned (double quotes, semicolons, 2-space indent, `printW
 
 ## 14. Open questions / known deviations
 
-1. **Duplicated DTOs and pass-through services.** `api/<feature>-api/dto/*` are byte-identical to `application/<feature>/dto/*`, and `api/*/<feature>.service.ts` are one-line re-exports. Decide the single canonical location for DTOs (application looks like the intent) and whether the re-export shims should stay. `RecoverAccountDTO` deliberately exists only under `api/`, so the duplication is now inconsistent as well as redundant.
+1. **Duplicated DTOs.** `api/<feature>-api/dto/*` are byte-identical to `application/<feature>/dto/*`. Decide the single canonical location (application looks like the intent) and delete the copies. `RecoverAccountDTO` exists only under `api/`, so the duplication is inconsistent as well as redundant. The `api/*/<feature>.service.ts` re-export shims are gone.
 2. **`RedisService` is wired but unused.** `src/infra/redis` is provided and exported, and `RedisModule` is commented out of `InfraModule`. The intent is caching and locks, not now. Either enable it or delete it until needed.
-3. **RabbitMQ is configured but unwired.** Deps, the `rabbitmq` config namespace, the compose service and `RABBITMQ_*` vars all remain, and a complete producer-side AMQP mail queue is preserved at `src/infra/mail-queue/amqp`. Switching to it also requires an AMQP consumer to replace `EmailWorkerProcessor`.
+3. **RabbitMQ is configured but unwired.** Deps, the `rabbitmq` config namespace, the compose service and `RABBITMQ_*` vars all remain, and a complete producer-side AMQP mail queue is preserved at `src/infra/mail-queue/amqp`. **This is deliberate** — the BullMQ `MailQueueModule` is the live implementation, and the AMQP path is kept for reference rather than exercised. Switching to it would also require an AMQP consumer to replace `EmailWorkerProcessor`.
 4. **`Activity` has no `deletedAt`.** Every other user-facing model is soft-deletable; `Activity` is the only one without it, so activities outlive a soft-deleted actor and cannot be hidden. Deliberate or oversight?
-5. **`token.token` stores the plaintext token** alongside `token_hash`. The hash is what lookups use, so the plaintext column is redundant as well as sensitive.
-6. **The api/ DTO shims and `CursorPaginationQueryDTO`** are untested; the pagination reference implementation changed from Prisma's positional cursor to a keyset resume during the MikroORM migration.
+5. **`token.token` stores the plaintext token** alongside `token_hash`. The hash is what lookups use, so the plaintext column is redundant — and it is the more serious of the two, because a dump or a backup then hands over usable refresh and reset tokens directly, which is the thing hashing exists to prevent. Dropping it needs a migration and a check that nothing reads it.
+6. **The api/ DTOs and `CursorPaginationQueryDTO`** are untested; the pagination reference implementation changed from Prisma's positional cursor to a keyset resume during the MikroORM migration.
 7. **Pruning dependencies by grep is unreliable.** `@fastify/static` was removed as unused and broke boot, because `SwaggerModule` loads it dynamically. Any further pruning needs a runtime check, not a search.
 8. **`app.close()` does not resolve after the app has served a request.** Measured, not assumed: with zero requests it closes immediately; after a single request it never resolves, and neither does `MikroORM.close()` nor `MikroORM.close(true)`. There is **no connection leak** — the Postgres backend count settles at the pool size and stays flat across 50+ requests — so this affects teardown only, not steady-state. Graceful shutdown therefore drains via the HTTP server rather than `app.close()` (§13). Root cause not identified; worth revisiting, because it also means `enableShutdownHooks()` cannot be used.
+9. **Resolved since this list was written**, kept only so the reasoning is not re-litigated: the `GeminiService` boilerplate stub, the `example` queue and its processor, the unused organization/tenancy decorators, the dead `MfaTempGuard` (which read a `tokenType` claim that no token carries — `AuthGuard` enforces `payload.type`, and the guard was never applied to any route) and the unused `CLIENT_URL`/`RESEARCHER_URL` config have all been deleted; `setupMfa` refuses to replace an *enabled* factor; `disableMfa` clears the secret; `CORS_ORIGINS` replaced `origin: "*"` with `credentials: true`; the `mail` queue is registered once, from `MAIL_QUEUE_NAME`; **account deletion now exists** (`POST /auth/delete-account`), which was the entry point the entire recovery lifecycle was missing; and **`request_log` and expired `token` rows are now pruned** by the `maintenance` queue — see §8 and §12.
+
+## 15. Realtime — the socket, and its rules
+
+One Socket.IO namespace (`/realtime`) on the API's own port, plus notifications
+as a table the socket pushes into. Three rules make it safe to extend; a fourth
+says where it may live.
+
+### 15.1 Authentication is a ticket, and only a ticket
+
+`POST /auth/realtime-ticket` (access token required) returns a JWT typed
+`REALTIME` that expires in a minute and claims nothing but the user id.
+
+- No route declares `REALTIME` in `@AllowTokenTypes`, so `AuthGuard` refuses it
+  everywhere. **Do not add it to a route.** The ticket's whole value is that it
+  is useless against the REST API, and one decoration removes that.
+- The handshake accepts the ticket from `auth.ticket` or a bearer header, and
+  disconnects anything else immediately — no connection outlives a failed check.
+- Tickets are **not** reused. The client asks for a fresh one per connection;
+  a reconnect with a stale ticket fails and the client fetches another.
+
+### 15.2 A subscription is a read
+
+`realtime.topics.ts` declares every topic and its `canSubscribe(userId, id)`.
+The gateway calls it before joining a room and refuses otherwise.
+
+- Scope the check to the reader. `deck` does it with `em.count(Deck, { id, user })`,
+  so a deck that is not theirs and a deck that does not exist give the same
+  answer and the refusal says nothing about which it was.
+- Validate the id before querying, not inside the query.
+- **Never declare a topic named `user`.** Room names are `<topic>:<id>` and the
+  user room is `user:<id>`, so such a topic would be identical to the room every
+  socket is already in — subscribing to `user:<someone>` would join their private
+  room. `realtime.topics.spec.ts` asserts both halves of this.
+
+### 15.3 Producers do not know about sockets
+
+Domain code calls `RealtimeService.emitToUser/emitToRoom` and nothing else. It is
+best-effort by design: every method no-ops when no server is attached (the worker
+never has one) and swallows emit failures, because a notification that could not
+be pushed is still a row fetched on the next page load.
+
+`NotificationService.create` follows the same rule and **never throws** — it is
+called from password changes and imports, and a courtesy is not worth failing
+those for.
+
+### 15.4 The gateway lives in the API process, and the events listener is separate
+
+`RealtimeModule` is imported by the API's composition root only. The worker
+serves no HTTP and must not open a socket server.
+
+`GenerationEventsModule` exists because of a subtler version of the same thing:
+the **worker imports `GenerationApplicationModule`** to run the same generation
+rules, so a `QueueEvents` listener declared there would be constructed in both
+processes and both would write the same notification for one run. It is imported
+by `ApplicationModule` alone. **Keep it that way** — and if another listener is
+added, ask which processes construct it before deciding where it lives.
+
+`QueueEvents` is also why the API learns about a finished run at all: the worker
+writes the row, but BullMQ's own completion event is what lets the API process —
+the only one with a socket — announce it.

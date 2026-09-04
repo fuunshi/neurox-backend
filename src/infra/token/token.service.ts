@@ -104,11 +104,12 @@ export class TokenService {
   async revokeToken({
     token,
     reason,
-    performedById,
     tx,
   }: {
     token: string;
     reason?: string;
+    // Accepted but unused: nothing records who revoked a token, and no caller
+    // passes it. Kept in the signature so the option is not silently dropped.
     performedById?: string;
     tx?: EntityManager;
   }): Promise<void> {

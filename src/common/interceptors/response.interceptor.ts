@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { Observable } from "rxjs";
 import { map } from "rxjs/operators";
-import { FastifyRequest } from "fastify";
+import { FastifyReply, FastifyRequest } from "fastify";
 
 interface RequestWithId extends FastifyRequest {
   requestId?: string;
@@ -31,7 +31,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
     next: CallHandler,
   ): Observable<ResponseFormat<T>> {
     const request = context.switchToHttp().getRequest<RequestWithId>();
-    const response = context.switchToHttp().getResponse();
+    const response = context.switchToHttp().getResponse<FastifyReply>();
     const requestId = request.requestId || "unknown";
 
     return next.handle().pipe(

@@ -1,5 +1,7 @@
 import { CARD_STATUS } from "@/common/constant/enums";
 import { CursorPaginationQueryDTO } from "@/common/dto";
+import { EXPORT_FORMAT, type ExportFormat } from "@/application/deck/export";
+import { MAX_IMPORT_CHARS } from "@/application/deck/import";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsEnum,
@@ -122,6 +124,44 @@ export class CardListDTO extends CursorPaginationQueryDTO {
   @IsOptional()
   @IsEnum(CARD_STATUS)
   status?: (typeof CARD_STATUS)[keyof typeof CARD_STATUS];
+}
+
+export class ImportCardsDTO {
+  @ApiProperty({
+    description:
+      "The document's text, already decoded. Sent as text rather than as a file " +
+      "so the parsing rules live in one place on the server and the request stays " +
+      "ordinary JSON.",
+  })
+  @IsString()
+  @Length(1, MAX_IMPORT_CHARS)
+  content!: string;
+
+  @ApiPropertyOptional({
+    enum: Object.values(EXPORT_FORMAT),
+    description:
+      "Which delimiter to expect. Omitted, it is sniffed from the first line.",
+  })
+  @IsOptional()
+  @IsEnum(EXPORT_FORMAT)
+  format?: ExportFormat;
+}
+
+export class ImportCardsResponseDTO {
+  @ApiProperty() created!: number;
+
+  /** One entry per unusable row, naming its line. Rows that are simply blank
+   *  padding are not reported — they are not a mistake. */
+  @ApiProperty({ type: [String] })
+  errors!: string[];
+
+  /** The cards as created, so the caller can show them without re-reading the
+   *  list it is already holding. */
+  // A thunk, because this class is declared above `CardResponseDTO`: a direct
+  // reference would be evaluated while the module is still initialising and hit
+  // the temporal dead zone.
+  @ApiProperty({ type: () => [CardResponseDTO] })
+  cards!: CardResponseDTO[];
 }
 
 export class CardResponseDTO {

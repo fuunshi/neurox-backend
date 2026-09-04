@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  computeStreak,
-  fillDays,
-  retentionRate,
-  type ReviewDay,
-} from "./stats";
+import { computeStreak, fillDays, retentionRate } from "./stats";
 
 describe("computeStreak", () => {
   it("is zero with no history", () => {

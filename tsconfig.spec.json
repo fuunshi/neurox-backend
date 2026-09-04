@@ -1,0 +1,21 @@
+{
+  // `tsconfig.json` excludes specs (and `test/`) because it exists to build and
+  // type-check `src`, where `rootDir` is. ESLint still has to resolve them: its
+  // `projectService` reports "not found by the project service" for any file no
+  // tsconfig claims, which is an error for the lint gate. This program is the
+  // same compilation plus the specs, and is used by the linter only -- nothing
+  // builds from it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The specs live outside `src`, so the base `rootDir` does not hold here.
+    "rootDir": "."
+  },
+  // `exclude` replaces the base list rather than merging into it, so the
+  // inherited spec exclusions have to be dropped explicitly here. `include` is
+  // the base program plus the specs, not the specs alone: module augmentations
+  // (fastify's `request.isMultipart`, say) only apply to a program that loads
+  // the module that declares them.
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

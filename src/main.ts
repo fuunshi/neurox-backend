@@ -5,7 +5,8 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from "@nestjs/platform-fastify";
-import { ConsoleLogger } from "@nestjs/common";
+import { IoAdapter } from "@nestjs/platform-socket.io";
+import { ConfigService } from "@nestjs/config";
 import compression from "@fastify/compress";
 import fastifyHelmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
@@ -22,14 +23,31 @@ async function bootstrap() {
   const appLogger = app.get(AppLoggerService);
   app.useLogger(appLogger);
 
+  const configService = app.get(ConfigService);
+
+  /**
+   * Socket.IO attaches to Fastify's underlying HTTP server, so the realtime
+   * gateway shares this port rather than opening another. Registered before
+   * `listen` because the adapter has to be in place when the server is created.
+   *
+   * The worker does not do this: it imports no gateway, serves no HTTP, and a
+   * second socket server there would be a second thing to authenticate.
+   */
+  app.useWebSocketAdapter(new IoAdapter(app));
+
   await app.register(compression);
 
+  /**
+   * An allowlist from config, and no `credentials`. Auth is a Bearer header, so
+   * no cookie ever rides a cross-origin call and claiming credentials support
+   * was misleading as well as unusable: browsers reject `origin: "*"` combined
+   * with `credentials: true` outright, which is what the previous pair was.
+   */
   app.enableCors({
-    origin: "*",
+    origin: configService.get<string[]>("app.corsOrigins"),
     methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
     preflightContinue: false,
     optionsSuccessStatus: 204,
-    credentials: true,
   });
 
   await app.register(fastifyHelmet);

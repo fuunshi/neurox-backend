@@ -16,24 +16,40 @@ type RenderedEmailContent = {
   text?: string;
 };
 
-type EmailTemplateDefinition = {
-  subject: string;
-  mjml: string;
-  text?: string;
+/**
+ * `nodemailer` ships no types of its own, so the surface this service uses is
+ * declared by hand: build a transport, then hand it a message. Transport
+ * options are assembled from config and passed through untouched.
+ */
+type MailOptions = {
+  host?: string;
+  port: number;
+  secure: boolean;
+  auth?: { user?: string; pass?: string };
 };
+
+type MailTransporter = {
+  sendMail(options: Record<string, unknown>): Promise<unknown>;
+};
+
+type MailModule = {
+  createTransport(options: MailOptions): MailTransporter;
+};
+
+const mailer = nodemailer as unknown as MailModule;
 
 // Templates are loaded from the template renderer service (mjml + handlebars files)
 @Injectable()
 export class EmailSenderService {
   private readonly logger = new Logger(EmailSenderService.name);
-  private readonly transporter: nodemailer.Transporter;
+  private readonly transporter: MailTransporter;
   private readonly fromEmail: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly templateRenderer: TemplateRendererService,
   ) {
-    this.transporter = nodemailer.createTransport({
+    this.transporter = mailer.createTransport({
       host: this.configService.get<string>("smtp.host"),
       port: this.configService.get<number>("smtp.port") || 587,
       secure: this.configService.get<boolean>("smtp.secure") || false,

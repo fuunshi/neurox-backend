@@ -2,6 +2,7 @@ import { AUDIT_ACTION, DB_TOKEN_TYPE, Role } from "@/common/constant/enums";
 import { JwtPayload } from "@/common/interfaces/jwt-payload.interface";
 import { AuditService } from "@/infra/audit/audit.service";
 import { EMAIL_TEMPLATES, MailQueueService } from "@/infra/mail-queue";
+import { NotificationService } from "@/application/notification/notification.service";
 import { TokenService } from "@/infra/token/token.service";
 import { RequestTokenType } from "@/common/types/request.type";
 import {
@@ -55,6 +56,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly em: EntityManager,
     private readonly mailQueueService: MailQueueService,
+    private readonly notifications: NotificationService,
   ) {
     this.resetTokenExpiresIn = this.configService.getOrThrow<
       JwtSignOptions["expiresIn"]
@@ -168,6 +170,23 @@ export class AuthService {
       }
     }
 
+    const user = await this.em.findOneOrFail(User, { id: userId });
+
+    /**
+     * Overwriting a secret that was generated but never confirmed is the
+     * intended behaviour: the enrol screen issues a key on every visit, and one
+     * that was never paired is worthless to keep. Overwriting an *active* factor
+     * is not the same thing — it would take only a session to rebind the account
+     * to a new authenticator, and the owner would lose the factor they can still
+     * read codes from. Turning MFA off first is what proves possession, so that
+     * is the only route back to enrolment.
+     */
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException(
+        "MFA is already enabled. Disable it before enrolling another authenticator.",
+      );
+    }
+
     const secret = speakeasy.generateSecret({
       name: `${this.appName} (${userId})`,
     });
@@ -176,7 +195,6 @@ export class AuthService {
       throw new BadRequestException("Failed to generate otpauth URL");
     }
 
-    const user = await this.em.findOneOrFail(User, { id: userId });
     this.em.assign(user, {
       twoFactorSecret: secret.base32,
     });
@@ -275,8 +293,20 @@ export class AuthService {
     }
 
     const userToUpdate = await this.em.findOneOrFail(User, { id: userId });
+
+    /**
+     * The secret goes with the flag. Leaving it behind would keep a working
+     * shared key on the account, so a later enrolment could reuse it instead of
+     * issuing a fresh one — and signing in with the old authenticator would
+     * start working again the moment MFA was turned back on.
+     *
+     * `twoFactorEnforced` deliberately survives: it is the account's policy flag,
+     * and clearing it here would let anyone subject to a required second factor
+     * escape it by turning their own enrolment off.
+     */
     this.em.assign(userToUpdate, {
       twoFactorEnabled: false,
+      twoFactorSecret: null,
     });
     await this.em.flush();
 
@@ -536,6 +566,18 @@ export class AuthService {
     // Revoke all existing tokens after password change
     await this.tokenService.revokeAllUserTokens(id, "Password updated");
 
+    /**
+     * Told to the account rather than to the session that made the change.
+     *
+     * Every device was just signed out, so whatever is reading this is a fresh
+     * sign-in — and if the change was not theirs, this is the first they hear of
+     * it. That is the whole point of notifying on a security event.
+     */
+    await this.notifications.create(id, {
+      type: "PASSWORD_CHANGED",
+      params: { at: new Date().toISOString() },
+    });
+
     return { message: "Password updated successfully" };
   }
 
@@ -768,7 +810,15 @@ export class AuthService {
       },
       {
         populate: ["user"],
-        fields: ["revokedAt", "expiresAt", "user.id", "user.emailVerified"],
+        // `user.email` is selected because the confirmation notification names
+        // the address; without it the row is written with a fallback phrase.
+        fields: [
+          "revokedAt",
+          "expiresAt",
+          "user.id",
+          "user.email",
+          "user.emailVerified",
+        ],
       },
     );
 
@@ -828,6 +878,16 @@ export class AuthService {
           revokedReason: "Email verified",
         },
       );
+    });
+
+    /**
+     * The confirmation lands here rather than in the email, because the reader
+     * has just been told by a web page that it worked, and a second email saying
+     * so is noise. The bell records it for the record.
+     */
+    await this.notifications.create(storedToken.user.id, {
+      type: "EMAIL_VERIFIED",
+      params: { email: storedToken.user.email ?? "your address" },
     });
 
     return { message: "Email verified successfully" };
@@ -990,6 +1050,64 @@ export class AuthService {
 
     await this.mailQueueService.enqueueEmail({
       to: email,
+      template: EMAIL_TEMPLATES.VERIFY_EMAIL,
+      payload: {
+        token: verificationToken,
+      },
+      retryAttempt: 1,
+    });
+  }
+
+  /**
+   * Send a fresh verification link because the reader asked for one.
+   *
+   * Distinct from the resend above, which happens on a failed login and waits
+   * for the outstanding link to expire so that one stuck account cannot be
+   * mailed repeatedly. This is an explicit request, so it issues a new link
+   * immediately and revokes the old one — two live links for one address would
+   * mean a link that never arrived still works, which is exactly the confusion
+   * the reader is trying to get out of.
+   *
+   * It answers identically whether or not the address belongs to an unverified
+   * account. Unauthenticated, anything else is an oracle for which addresses are
+   * registered.
+   */
+  async resendVerification(email: string): Promise<void> {
+    const user = await this.em.findOne(User, { email });
+
+    if (!user || user.emailVerified || !user.isActive) return;
+
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = getTokenExpiry(this.emailVerificationTokenExpiresIn);
+    const now = new Date();
+
+    await this.em.transactional(async (tx) => {
+      await tx.nativeUpdate(
+        Token,
+        {
+          user: user.id,
+          type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
+          revokedAt: null,
+        },
+        {
+          revokedAt: now,
+          revokedReason: "Replaced by a new verification link",
+        },
+      );
+
+      tx.create(Token, {
+        user: tx.getReference(User, user.id),
+        token: verificationToken,
+        tokenHash: this.tokenService.hashToken(verificationToken),
+        type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
+        expiresAt,
+      });
+
+      await tx.flush();
+    });
+
+    await this.mailQueueService.enqueueEmail({
+      to: user.email,
       template: EMAIL_TEMPLATES.VERIFY_EMAIL,
       payload: {
         token: verificationToken,

@@ -5,6 +5,7 @@ import { AuthApiModule } from "./auth-api/auth-api.module";
 import { DeckApiModule } from "./deck-api/deck-api.module";
 import { GenerationApiModule } from "./generation-api/generation-api.module";
 import { GraphApiModule } from "./graph-api/graph-api.module";
+import { NotificationApiModule } from "./notification-api/notification-api.module";
 import { QuizApiModule } from "./quiz-api/quiz-api.module";
 import { SourceApiModule } from "./source-api/source-api.module";
 import { StudyApiModule } from "./study-api/study-api.module";
@@ -24,6 +25,7 @@ import { UserApiModule } from "./user-api/user-api.module";
     SourceApiModule,
     GenerationApiModule,
     GraphApiModule,
+    NotificationApiModule,
     QuizApiModule,
     StudyApiModule,
     AnalyticsApiModule,

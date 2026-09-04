@@ -1,8 +1,6 @@
 import {
   IsOptional,
-  IsDateString,
   IsUrl,
-  IsArray,
   IsString,
   IsISO8601,
   IsJSON,

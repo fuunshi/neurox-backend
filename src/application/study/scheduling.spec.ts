@@ -20,10 +20,7 @@ function review(
   grades: Array<(typeof REVIEW_RATING)[keyof typeof REVIEW_RATING]>,
   from: SchedulingState = initialSchedulingState(),
 ) {
-  return grades.reduce(
-    (state, rating) => schedule(state, rating, NOW),
-    from as SchedulingState,
-  );
+  return grades.reduce((state, rating) => schedule(state, rating, NOW), from);
 }
 
 describe("a new card", () => {

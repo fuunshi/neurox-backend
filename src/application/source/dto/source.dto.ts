@@ -7,13 +7,7 @@ import {
 import { CursorPaginationQueryDTO } from "@/common/dto";
 import { Source } from "@/database/entities";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import {
-  IsEnum,
-  IsOptional,
-  IsString,
-  Length,
-  MaxLength,
-} from "class-validator";
+import { IsEnum, IsOptional, IsString, Length } from "class-validator";
 
 export class CreateTextSourceDTO {
   @ApiProperty({ example: "Chapter 3 — Cell biology" })

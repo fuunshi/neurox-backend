@@ -14,7 +14,22 @@ import { BaseContext } from "./types";
 
 type RenderResult = { subject: string; html: string; text?: string };
 
-type RegistryEntry = TemplateRegistryEntry<any, any>;
+type RegistryEntry = TemplateRegistryEntry<
+  Record<string, unknown>,
+  Record<string, unknown>
+>;
+
+/**
+ * `mjml` ships no types of its own, so the little this service needs from it is
+ * declared by hand: compile a document, then report the HTML it produced along
+ * with any validation errors it tolerated.
+ */
+type MjmlCompiler = (
+  source: string,
+  options: { validationLevel: "strict" },
+) => Promise<{ html: string; errors: unknown[] }>;
+
+const compileMjml = mjml2html as MjmlCompiler;
 
 @Injectable()
 export class TemplateRendererService {
@@ -90,7 +105,6 @@ export class TemplateRendererService {
 
     const filePath = entry.file;
     let compiled = this.getCached(filePath);
-    let mjml: string;
 
     if (!compiled) {
       const content = await this.loadTemplate(filePath);
@@ -98,7 +112,7 @@ export class TemplateRendererService {
     }
 
     const dynamicContext =
-      entry.buildContext?.(payload as any, this.baseContext) ?? {};
+      entry.buildContext?.(payload, this.baseContext) ?? {};
 
     const context = {
       ...this.baseContext,
@@ -106,12 +120,12 @@ export class TemplateRendererService {
       ...dynamicContext,
     } as TemplatePayload<K> & TemplateContext<K> & BaseContext;
 
-    mjml = compiled(context);
+    const mjml = compiled(context);
 
     this.logger.log(`Rendered email: \n ${mjml}`);
     this.logger.log(`MJML output starts with: ${mjml.substring(0, 150)}`);
 
-    const rendered = await mjml2html(mjml, { validationLevel: "strict" });
+    const rendered = await compileMjml(mjml, { validationLevel: "strict" });
     if (rendered.errors && rendered.errors.length > 0) {
       this.logger.error(
         `MJML render errors for ${filePath}: ${JSON.stringify(rendered.errors)}`,

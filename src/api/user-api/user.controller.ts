@@ -4,7 +4,7 @@ import { ApiOperation, ApiResponse, ApiBearerAuth } from "@nestjs/swagger";
 import { RegisterDTO, RegisterResponseDTO } from "./dto/register.dto";
 import { Public } from "@/common/decorators/auth.decorator";
 import { AuthenticatedRequest } from "@/common/types/request.type";
-import { User, UserProfile } from "@/database/entities";
+import { UserProfile } from "@/database/entities";
 import { UpdateUserProfileDTO } from "./dto/update-user-profile.dto";
 @Controller("user")
 export class UserController {

@@ -62,8 +62,11 @@ export class Migration20260924112343 extends Migration {
       `alter table "quiz_answer" drop constraint "quiz_answer_attempt_id_foreign";`,
     );
 
-    this.addSql(`drop table if exists "quiz_attempt" cascade;`);
+    // Answers before attempts: the FK points from answer to attempt, so this is
+    // the order that holds without leaning on `cascade` to cover a dependent
+    // table that was still there.
     this.addSql(`drop table if exists "quiz_answer" cascade;`);
+    this.addSql(`drop table if exists "quiz_attempt" cascade;`);
 
     this.addSql(`drop type "quiz_format";`);
     this.addSql(`drop type "quiz_attempt_status";`);

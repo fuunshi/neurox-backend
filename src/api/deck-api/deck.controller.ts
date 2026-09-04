@@ -6,6 +6,8 @@ import {
   CreateDeckDTO,
   DeckListDTO,
   DeckResponseDTO,
+  ImportCardsDTO,
+  ImportCardsResponseDTO,
   UpdateCardDTO,
   UpdateDeckDTO,
 } from "@/application/deck/dto/deck.dto";
@@ -96,6 +98,25 @@ export class DeckController {
         `attachment; filename="${file.filename.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
       )
       .send(file.body);
+  }
+
+  @Post("decks/:id/import")
+  @ApiOperation({
+    summary: "Import cards from a CSV or TSV file",
+    description:
+      "The inverse of the export, and it reads the columns the export writes — " +
+      "so a deck exported and imported elsewhere arrives with its questions, " +
+      "answers, hints and schedule intact. Rows that cannot be read are reported " +
+      "by line and skipped rather than failing the whole file. The batch is one " +
+      "transaction: either all of it lands or none of it does.",
+  })
+  @ApiResponse({ status: 201, type: ImportCardsResponseDTO })
+  async importCards(
+    @Req() req: AuthenticatedRequest,
+    @Param("id") id: string,
+    @Body() dto: ImportCardsDTO,
+  ): Promise<ImportCardsResponseDTO> {
+    return this.deckService.importCards(req.authContext.user.id, id, dto);
   }
 
   @Get("decks/:id")

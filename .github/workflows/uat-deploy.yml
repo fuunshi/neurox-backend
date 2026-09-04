@@ -49,8 +49,15 @@ jobs:
       - name: Type-check
         run: pnpm exec tsc --noEmit   # no typecheck script in package.json, call tsc directly
  
+      # Calls eslint directly rather than `pnpm run lint`, which passes `--fix`:
+      # rewriting files is the opposite of what a check should do.
+      - name: Lint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
+
+      # No `--passWithNoTests`: that flag lets the gate pass when the specs
+      # disappear, which is the one failure it exists to catch.
       - name: Unit tests
-        run: pnpm run test --passWithNoTests
+        run: pnpm run test
  
   # ──────────────────────────────────────────
   # 2. Build & push Docker image

@@ -5,6 +5,7 @@ import appConfig from "./app.config";
 import authConfig from "./auth.config";
 import databaseConfig from "./database.config";
 import geminiConfig from "./gemini.config";
+import maintenanceConfig from "./maintenance.config";
 import rabbitmqConfig from "./rabbitmq.config";
 import redisConfig from "./redis.config";
 import smtpConfig from "./smtp.config";
@@ -25,6 +26,7 @@ import throttlerConfig from "./throttler.config";
         rabbitmqConfig,
         smtpConfig,
         geminiConfig,
+        maintenanceConfig,
       ],
       envFilePath: [".env", ".env.local"],
     }),

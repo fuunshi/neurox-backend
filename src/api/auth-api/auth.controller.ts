@@ -2,7 +2,17 @@ import { AccountLifecycleService } from "@/application/account/account-lifecycle
 import { AllowTokenTypes, Public } from "@/common/decorators/auth.decorator";
 import { AuthenticatedRequest } from "@/common/types/request.type";
 import { TOKEN_TYPE } from "@/common/types/token.type";
-import { Body, Controller, Get, Post, Query, Req } from "@nestjs/common";
+import { RealtimeTicketService } from "@/realtime/realtime.ticket";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+  Req,
+} from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -18,6 +28,8 @@ import {
 } from "./dto/login.dto";
 import { RefreshDTO, RefreshResponseDTO } from "./dto/refresh.dto";
 import { RecoverAccountDTO } from "./dto/recover-account.dto";
+import { DeleteAccountDTO } from "./dto/delete-account.dto";
+import { ResendVerificationDTO } from "./dto/resend-verification.dto";
 import { ResetPasswordDTO } from "./dto/reset-password.dto";
 import { UpdatePasswordDTO } from "./dto/update-password.dto";
 import { VerifyEmailQueryDTO } from "./dto/verify-email.query.dto";
@@ -29,6 +41,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly accountLifecycle: AccountLifecycleService,
+    private readonly realtimeTickets: RealtimeTicketService,
   ) {}
 
   /**
@@ -167,6 +180,96 @@ export class AuthController {
       ipAddress,
       userAgent,
     );
+  }
+
+  /**
+   * Mints a ticket for opening a realtime socket.
+   *
+   * Deliberately on the *auth* controller and behind the ordinary access token:
+   * a socket is a way to receive data, so the credential that opens one is
+   * issued the same way the credential that reads data is — and only to someone
+   * already signed in. The ticket it returns is typed `REALTIME`, which no REST
+   * route accepts, so it cannot be used to read anything.
+   *
+   * The client asks for a new one per connection. See `realtime.ticket.ts`.
+   */
+  @Post("realtime-ticket")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Get a short-lived ticket for the realtime socket" })
+  @ApiResponse({ status: 200, description: "Ticket issued" })
+  realtimeTicket(@Req() req: AuthenticatedRequest): {
+    ticket: string;
+    expiresInSeconds: number;
+  } {
+    // Synchronous: signing a JWT is CPU work, not I/O, so there is nothing to
+    // await and an `async` here would only add a microtask.
+    return this.realtimeTickets.issue(req.authContext.user.id);
+  }
+
+  /**
+   * Deletes the caller's own account, softly, and starts its recovery window.
+   *
+   * This is the entry point the rest of the lifecycle was missing: the grace
+   * period, `recover-account` above, the `ACCOUNT_RECOVERABLE` conflict on
+   * register and the recycling cron all read `deletedAt`, and nothing else in
+   * the codebase ever set it.
+   *
+   * The response carries the deadline so the client can say how long the
+   * account can still be brought back, rather than leaving the reader to
+   * discover the window by losing it.
+   */
+  @Post("delete-account")
+  @ApiOperation({ summary: "Delete your own account" })
+  @ApiResponse({
+    status: 200,
+    description: "Account scheduled for deletion",
+  })
+  @ApiResponse({ status: 401, description: "The password is wrong" })
+  async deleteAccount(
+    @Req() req: AuthenticatedRequest,
+    @Body() deleteAccountDTO: DeleteAccountDTO,
+  ): Promise<{ message: string; recoverableUntil: Date }> {
+    const { recoverableUntil } = await this.accountLifecycle.remove(
+      req.authContext.user.id,
+      deleteAccountDTO.password,
+    );
+
+    return {
+      message:
+        "Your account has been deleted and can still be recovered during the grace period.",
+      recoverableUntil,
+    };
+  }
+
+  /**
+   * Sends a new verification link.
+   *
+   * Until now the only way to get one was to attempt a login that would be
+   * rejected for being unverified — which is a strange thing to ask of someone
+   * who cannot sign in. The link expires in fifteen minutes, so a reader who
+   * misplaced the first email had no way forward at all.
+   *
+   * Always answers `200`, whether or not the address belongs to an unverified
+   * account: this endpoint is public, and a different answer for a known address
+   * would turn it into a way to discover who has an account here.
+   */
+  @Public()
+  @Post("resend-verification")
+  @ApiOperation({ summary: "Send a new verification link" })
+  @ApiResponse({
+    status: 200,
+    description:
+      "Accepted. Sent if the address belongs to an unverified account.",
+  })
+  async resendVerification(
+    @Body() resendVerificationDTO: ResendVerificationDTO,
+  ): Promise<{ message: string }> {
+    await this.authService.resendVerification(resendVerificationDTO.email);
+
+    return {
+      message:
+        "If that address needs confirming, a new link has been sent to it.",
+    };
   }
 
   /**

@@ -1,0 +1,21 @@
+# Normalise line endings to LF, in the repository and in the working tree.
+#
+# Prettier's default is `endOfLine: lf`, and there is no prettier config file
+# here overriding it. On Windows `core.autocrlf=true` checks everything out as
+# CRLF, so every single line becomes a `prettier/prettier` violation: the lint
+# script reports tens of thousands of them, and — because `pnpm run lint` passes
+# `--fix` — running it rewrites the entire tree's line endings.
+#
+# Declaring `eol=lf` here makes the working tree LF on every platform, which is
+# what prettier and the CI checkout already expect. Files already checked out as
+# CRLF keep those endings until they are checked out again; run
+# `git rm --cached -r . && git reset --hard` (or re-clone) to normalise an
+# existing working copy.
+* text=auto eol=lf
+
+# Keep these byte-for-byte.
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

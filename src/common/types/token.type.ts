@@ -3,6 +3,15 @@ export const TOKEN_TYPE = {
   REFRESH: "refresh",
   MFA_TEMP: "mfa_temp",
   TEMP: "temp",
+  /**
+   * A one-shot ticket for opening a realtime socket. See `realtime.ticket.ts`.
+   *
+   * Deliberately its own type rather than a reused access token: `AuthGuard`
+   * admits only the types a route declares through `@AllowTokenTypes`, and no
+   * route declares this one — so a ticket that leaks out of the handshake
+   * cannot be replayed against the REST API.
+   */
+  REALTIME: "realtime",
 } as const;
 
 export type JwtTokenType = (typeof TOKEN_TYPE)[keyof typeof TOKEN_TYPE];

@@ -1,11 +1,9 @@
 import { AccountLifecycleService } from "@/application/account/account-lifecycle.service";
-import { ACTIVITY_TYPES, CONTEXT_TYPES, ENTITY_TYPES } from "@/common/constant";
 import { ACCOUNT_ERROR_CODES } from "@/common/constant/account.constant";
 import { AUDIT_ACTION, DB_TOKEN_TYPE } from "@/common/constant/enums";
 import { AuditService } from "@/infra/audit/audit.service";
 import { EMAIL_TEMPLATES, MailQueueService } from "@/infra/mail-queue";
 import { TokenService } from "@/infra/token/token.service";
-import { handleError } from "@/common/utils/error/handler/generic.handler";
 import { getTokenExpiry } from "@/common/utils/token/get-token-expiry.util";
 import { User, UserProfile } from "@/database/entities";
 import { EntityManager } from "@mikro-orm/postgresql";

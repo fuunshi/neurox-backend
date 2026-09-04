@@ -1,6 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
-import { SeederService, DEMO_EMAIL, DEMO_PASSWORD } from "./seeder.service";
+import { SeederService, DEMO_PASSWORD } from "./seeder.service";
 import { SeederModule } from "./seeder.module";
 
 /**

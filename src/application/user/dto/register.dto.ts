@@ -1,6 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
-import { User, UserProfile } from "@/database/entities";
 import {
   IsEmail,
   IsNotEmpty,
@@ -9,7 +8,6 @@ import {
   IsStrongPassword,
   Matches,
   MinLength,
-  MaxLength,
   Length,
 } from "class-validator";
 
@@ -28,7 +26,7 @@ export class RegisterDTO {
   email!: string;
 
   @ApiProperty({ example: "johndoe", description: "User username" })
-  @Transform(({ value }) =>
+  @Transform(({ value }): unknown =>
     typeof value === "string" ? value.toLowerCase() : value,
   )
   @IsNotEmpty({ message: "Username is required" })

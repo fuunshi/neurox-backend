@@ -13,7 +13,7 @@ import {
   IS_PUBLIC_KEY,
 } from "../decorators/auth.decorator";
 import { JwtPayload } from "../interfaces/jwt-payload.interface";
-import { AuthenticatedRequest, RequestTokenType } from "../types/request.type";
+import { AuthenticatedRequest } from "../types/request.type";
 import { JwtTokenType, TOKEN_TYPE } from "../types/token.type";
 
 @Injectable()
@@ -83,7 +83,7 @@ export class AuthGuard implements CanActivate {
           purpose: payload.purpose,
         },
       };
-    } catch (err) {
+    } catch {
       throw new UnauthorizedException("Invalid or expired token");
     }
 

@@ -38,6 +38,10 @@ export const ACTIVITY_TYPES = {
   SOURCE_DELETED: "SOURCE_DELETED",
 
   CARDS_GENERATED: "CARDS_GENERATED",
+  /** One entry per import, not one per card: a file of two hundred cards is one
+   *  thing the reader did, and two hundred feed entries would bury everything
+   *  around it. */
+  CARDS_IMPORTED: "CARDS_IMPORTED",
 
   QUIZ_STARTED: "QUIZ_STARTED",
   QUIZ_COMPLETED: "QUIZ_COMPLETED",

@@ -5,7 +5,9 @@ import { AnalyticsApplicationModule } from "./analytics/analytics.module";
 import { AuthApplicationModule } from "./auth/auth.module";
 import { DeckApplicationModule } from "./deck/deck.module";
 import { GenerationApplicationModule } from "./generation/generation.module";
+import { GenerationEventsModule } from "./generation/generation-events.module";
 import { GraphApplicationModule } from "./graph/graph.module";
+import { NotificationApplicationModule } from "./notification/notification.module";
 import { QuizApplicationModule } from "./quiz/quiz.module";
 import { SourceApplicationModule } from "./source/source.module";
 import { StudyApplicationModule } from "./study/study.module";
@@ -26,7 +28,9 @@ import { UserApplicationModule } from "./user/user.module";
     DeckApplicationModule,
     SourceApplicationModule,
     GenerationApplicationModule,
+    GenerationEventsModule,
     GraphApplicationModule,
+    NotificationApplicationModule,
     QuizApplicationModule,
     StudyApplicationModule,
     AnalyticsApplicationModule,
@@ -39,7 +43,9 @@ import { UserApplicationModule } from "./user/user.module";
     DeckApplicationModule,
     SourceApplicationModule,
     GenerationApplicationModule,
+    GenerationEventsModule,
     GraphApplicationModule,
+    NotificationApplicationModule,
     QuizApplicationModule,
     StudyApplicationModule,
     AnalyticsApplicationModule,

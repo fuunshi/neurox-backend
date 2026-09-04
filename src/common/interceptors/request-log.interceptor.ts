@@ -14,6 +14,17 @@ interface RequestWithId extends FastifyRequest {
   user?: { userId: string };
 }
 
+/**
+ * `catchError` re-throws whatever was thrown: normally an `HttpException`,
+ * whose `status` is private to TS but present at runtime, though any value can
+ * surface here. Only the fields that get logged are named.
+ */
+interface LoggedError {
+  status?: number;
+  message?: string;
+  stack?: string;
+}
+
 @Injectable()
 export class RequestLogInterceptor implements NestInterceptor {
   constructor(private readonly em: EntityManager) {}
@@ -37,11 +48,11 @@ export class RequestLogInterceptor implements NestInterceptor {
     const sanitizedQuery = request.query as Record<string, unknown>;
 
     return next.handle().pipe(
-      tap(async () => {
+      tap(() => {
         const responseTime = Date.now() - startTime;
         const statusCode = response.statusCode;
 
-        await this.logRequest({
+        void this.logRequest({
           requestId,
           userId,
           method,
@@ -54,9 +65,10 @@ export class RequestLogInterceptor implements NestInterceptor {
           userAgent,
         });
       }),
-      catchError(async (error) => {
+      catchError(async (error: unknown) => {
         const responseTime = Date.now() - startTime;
-        const statusCode = error.status || 500;
+        const { status, message, stack } = error as LoggedError;
+        const statusCode = status || 500;
 
         await this.logRequest({
           requestId,
@@ -69,8 +81,8 @@ export class RequestLogInterceptor implements NestInterceptor {
           responseTime,
           ipAddress,
           userAgent,
-          errorMessage: error.message,
-          errorStack: error.stack,
+          errorMessage: message,
+          errorStack: stack,
         });
 
         throw error;

@@ -23,3 +23,20 @@ export const GENERATION_QUEUE_EVENTS = {
 
 export type GenerationQueueEvent =
   (typeof GENERATION_QUEUE_EVENTS)[keyof typeof GENERATION_QUEUE_EVENTS];
+
+/**
+ * Queue carrying housekeeping jobs.
+ *
+ * Its own queue rather than a second job on `account`, because the two have
+ * nothing to do with each other: a maintenance run that deletes a large batch
+ * of rows should not be able to delay the account-recycling cron, and either
+ * can be paused on its own.
+ */
+export const MAINTENANCE_QUEUE_NAME = "maintenance";
+
+export const MAINTENANCE_QUEUE_EVENTS = {
+  RUN_MAINTENANCE: "run-maintenance",
+} as const;
+
+export type MaintenanceQueueEvent =
+  (typeof MAINTENANCE_QUEUE_EVENTS)[keyof typeof MAINTENANCE_QUEUE_EVENTS];

@@ -1,4 +1,5 @@
 import { ActivityRecorderService } from "@/application/activities/activity-recorder.service";
+import { NotificationService } from "@/application/notification/notification.service";
 import {
   ACTIVITY_TYPES,
   CONTEXT_TYPES,
@@ -20,7 +21,11 @@ import {
 } from "@/common/utils/pagination/cursor.util";
 import { Deck, FlashCard, User } from "@/database/entities";
 import { EntityManager, FilterQuery } from "@mikro-orm/postgresql";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import {
   CardListDTO,
   CardResponseDTO,
@@ -28,15 +33,19 @@ import {
   CreateDeckDTO,
   DeckListDTO,
   DeckResponseDTO,
+  ImportCardsDTO,
+  ImportCardsResponseDTO,
   UpdateCardDTO,
   UpdateDeckDTO,
 } from "./dto/deck.dto";
+import { ImportError, parseCards, type ImportParseResult } from "./import";
 
 @Injectable()
 export class DeckService {
   constructor(
     private readonly em: EntityManager,
     private readonly activities: ActivityRecorderService,
+    private readonly notifications: NotificationService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -230,6 +239,97 @@ export class DeckService {
     });
 
     return CardResponseDTO.from(card);
+  }
+
+  /**
+   * Reads a deck's cards back out of a file the export wrote.
+   *
+   * The whole batch is one transaction. A partial import would leave the reader
+   * holding a deck that is neither the file nor what they had before, and with
+   * no way to tell which rows landed — so either all of it arrives or none
+   * does. The row ceiling in `import.ts` is what keeps that transaction bounded.
+   *
+   * Rows that could not be read do **not** fail the import: a spreadsheet with
+   * one malformed line in two hundred should not be a dead end. They are
+   * reported by line, so the reader can fix those and import them again.
+   */
+  async importCards(
+    userId: string,
+    deckId: string,
+    dto: ImportCardsDTO,
+  ): Promise<ImportCardsResponseDTO> {
+    const deck = await this.findOwnedDeck(userId, deckId);
+
+    let parsed: ImportParseResult;
+    try {
+      parsed = parseCards(dto.content, dto.format);
+    } catch (error) {
+      // The parser's messages are written for the reader — "Line 4: no answer"
+      // — so they are surfaced verbatim rather than replaced with something
+      // generic.
+      if (error instanceof ImportError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+
+    if (parsed.cards.length === 0) {
+      // Nothing usable in the file at all. Answering 201 with `created: 0`
+      // would report a success where nothing happened.
+      throw new BadRequestException(
+        `Nothing could be imported. ${parsed.errors.slice(0, 5).join(" ")}`,
+      );
+    }
+
+    const cards = await this.em.transactional(async (tx) => {
+      const created = parsed.cards.map((card) =>
+        tx.create(FlashCard, {
+          deck,
+          front: card.front,
+          back: card.back,
+          hint: card.hint,
+          status: card.status,
+          // Restored from the file, which is what makes an export a backup
+          // rather than a copy: a deck brought back in is due when it was.
+          dueAt: card.dueAt,
+          intervalDays: card.intervalDays,
+          lapses: card.lapses,
+        }),
+      );
+
+      await tx.flush();
+
+      await this.activities.record(
+        {
+          type: ACTIVITY_TYPES.CARDS_IMPORTED,
+          entityType: ENTITY_TYPES.DECK,
+          entityId: deck.id,
+          actorId: userId,
+          contextType: CONTEXT_TYPES.USER,
+          contextId: userId,
+          parentEntityType: ENTITY_TYPES.DECK,
+          parentEntityId: deck.id,
+          data: { count: created.length, skipped: parsed.errors.length },
+        },
+        tx,
+      );
+
+      return created;
+    });
+
+    const response = new ImportCardsResponseDTO();
+    response.created = cards.length;
+    response.errors = parsed.errors;
+    response.cards = cards.map((card) => CardResponseDTO.from(card));
+
+    // After the response is built, so a notification that cannot be recorded
+    // cannot affect what the reader is told happened.
+    await this.notifications.create(userId, {
+      type: "CARDS_IMPORTED",
+      params: { deckId: deck.id, deckTitle: deck.title, count: cards.length },
+    });
+
+    return response;
   }
 
   async listCards(userId: string, deckId: string, dto: CardListDTO) {

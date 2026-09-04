@@ -24,7 +24,7 @@ export class ActivitiesService {
     }
 
     if (dto.contextType && dto.contextId) {
-      await this.verifyContextAccess(user, dto.contextType, dto.contextId);
+      this.verifyContextAccess(user, dto.contextType, dto.contextId);
     }
 
     const where: FilterQuery<Activity> = {};
@@ -52,8 +52,12 @@ export class ActivitiesService {
       };
     }
 
+    // The cursor is opaque to the client: it only ever carries the `{ id }`
+    // this method emits as `nextCursor`, so it is read back as that.
     const cursor = dto.cursor
-      ? JSON.parse(Buffer.from(dto.cursor, "base64").toString())
+      ? (JSON.parse(Buffer.from(dto.cursor, "base64").toString()) as {
+          id: string;
+        })
       : null;
 
     // `em.find` has no positional cursor, so the equivalent of Prisma's
@@ -128,7 +132,7 @@ export class ActivitiesService {
     };
   }
 
-  async verifyContextAccess(
+  verifyContextAccess(
     user: RequestUserType,
     contextType: ContextType,
     contextId: string,

@@ -1,5 +1,5 @@
 import { ConfigService } from "@nestjs/config";
-import { Logger } from "@nestjs/common";
+import { Logger, UseFilters } from "@nestjs/common";
 import {
   OnGatewayConnection,
   OnGatewayInit,
@@ -11,6 +11,7 @@ import {
 import type { Server, Socket } from "socket.io";
 import { RealtimeService } from "./realtime.service";
 import { RealtimeTicketService } from "./realtime.ticket";
+import { RealtimeExceptionFilter } from "./realtime-exception.filter";
 import { resolveTopic, topicRoom, userRoom } from "./realtime.topics";
 import { CLIENT_EVENTS, SERVER_EVENTS } from "./realtime.types";
 
@@ -37,7 +38,14 @@ interface SocketData {
  * for anything — the same reader is already in the same room.
  *
  * Everything else is opt-in and authorized. See `subscribe` below.
+ *
+ * ## Failures
+ *
+ * A socket error is answered by `RealtimeExceptionFilter`, which has to be
+ * declared here: global filters are not applied to WebSocket messages. See that
+ * file for why.
  */
+@UseFilters(RealtimeExceptionFilter)
 @WebSocketGateway({
   namespace: "/realtime",
   cors: { origin: socketOrigins(), credentials: false },

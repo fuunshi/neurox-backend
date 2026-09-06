@@ -1,11 +1,9 @@
 import { ConfigModule } from "@/infra/config/config.module";
 import { Module, Global } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import {
-  ThrottlerModule as NestThrottlerModule,
-  ThrottlerGuard,
-} from "@nestjs/throttler";
+import { ThrottlerModule as NestThrottlerModule } from "@nestjs/throttler";
 import { APP_GUARD } from "@nestjs/core";
+import { HttpThrottlerGuard } from "./http-throttler.guard";
 
 @Global()
 @Module({
@@ -37,7 +35,7 @@ import { APP_GUARD } from "@nestjs/core";
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: HttpThrottlerGuard,
     },
   ],
   exports: [NestThrottlerModule],

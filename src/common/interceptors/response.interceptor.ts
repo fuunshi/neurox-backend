@@ -30,6 +30,15 @@ export class ResponseInterceptor<T> implements NestInterceptor<
     context: ExecutionContext,
     next: CallHandler,
   ): Observable<ResponseFormat<T>> {
+    // HTTP-only. The envelope below is the REST envelope, and wrapping a
+    // WebSocket message in it would stop Nest recognising the `{ event, data }`
+    // a handler returns — so a socket message must pass through untouched. The
+    // cast is because the declared return type describes the wrapped branch
+    // only; nothing is converted on this path.
+    if (context.getType() !== "http") {
+      return next.handle() as Observable<ResponseFormat<T>>;
+    }
+
     const request = context.switchToHttp().getRequest<RequestWithId>();
     const response = context.switchToHttp().getResponse<FastifyReply>();
     const requestId = request.requestId || "unknown";

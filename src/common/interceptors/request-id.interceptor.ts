@@ -21,6 +21,13 @@ export class RequestIdInterceptor implements NestInterceptor {
   constructor(private readonly logger: AppLoggerService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    // HTTP-only. This interceptor reads a Fastify request and writes a response
+    // header, but a global interceptor runs for WebSocket messages too — and
+    // there `switchToHttp()` hands back the socket client, which has no
+    // `headers`. Without this, every `subscribe` threw before reaching its
+    // handler and the socket answered nothing but "Internal server error".
+    if (context.getType() !== "http") return next.handle();
+
     const request = context.switchToHttp().getRequest<RequestWithId>();
     const response = context.switchToHttp().getResponse<FastifyReply>();
     const startTime = Date.now();

@@ -20,6 +20,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["test/**/*.e2e-spec.ts"],
+    // An e2e test talks to a real server, so one test can span a sign-in, a
+    // socket handshake and an event round-trip. Vitest's 5s default is a
+    // unit-test budget, and it reads a slow-but-working socket as a failure.
+    testTimeout: 30_000,
     // `app.close()` has to drain BullMQ's Redis connections, which takes longer
     // than Vitest's 10s default.
     hookTimeout: 30_000,

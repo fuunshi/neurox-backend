@@ -30,6 +30,12 @@ export class RequestLogInterceptor implements NestInterceptor {
   constructor(private readonly em: EntityManager) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    // HTTP-only. This interceptor writes a `request_log` row from Fastify
+    // fields, and a global interceptor runs for WebSocket messages too — where
+    // those fields do not exist. A socket message is not an HTTP request and
+    // does not belong in that table.
+    if (context.getType() !== "http") return next.handle();
+
     const request = context.switchToHttp().getRequest<RequestWithId>();
     const response = context.switchToHttp().getResponse<FastifyReply>();
     const startTime = Date.now();

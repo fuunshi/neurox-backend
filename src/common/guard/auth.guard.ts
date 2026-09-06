@@ -28,6 +28,19 @@ export class AuthGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // WebSocket messages are authenticated by the handshake ticket, which
+    // `RealtimeGateway.handleConnection` verifies before the socket exists at
+    // all. A socket message carries no Authorization header — the guard reads
+    // one from an HTTP request that is not there — so applying this to a
+    // message refuses every `subscribe` on a connection already proven.
+    //
+    // The trade-off is deliberate: a future `@SubscribeMessage` handler is not
+    // covered by this guard and must check `socket.data.userId` itself, the way
+    // `onSubscribe` does. `RealtimeTicketService` documents the same split —
+    // no REST route accepts a realtime ticket, so this guard was never the
+    // socket's gate.
+    if (context.getType() !== "http") return true;
+
     // 1. Public route check
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),

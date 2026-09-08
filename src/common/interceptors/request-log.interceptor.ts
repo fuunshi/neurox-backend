@@ -4,10 +4,12 @@ import {
   ExecutionContext,
   CallHandler,
 } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
 import { Observable, tap, catchError } from "rxjs";
 import { FastifyRequest, FastifyReply } from "fastify";
 import { EntityManager } from "@mikro-orm/postgresql";
 import { RequestLog, User } from "@/database/entities";
+import { SKIP_LOGGING_KEY } from "@/common/decorators/auth.decorator";
 
 interface RequestWithId extends FastifyRequest {
   requestId?: string;
@@ -27,7 +29,10 @@ interface LoggedError {
 
 @Injectable()
 export class RequestLogInterceptor implements NestInterceptor {
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly reflector: Reflector,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     // HTTP-only. This interceptor writes a `request_log` row from Fastify
@@ -35,6 +40,15 @@ export class RequestLogInterceptor implements NestInterceptor {
     // those fields do not exist. A socket message is not an HTTP request and
     // does not belong in that table.
     if (context.getType() !== "http") return next.handle();
+
+    // Infrastructure routes — a metrics scrape, a container healthcheck — opt
+    // out: they are on timers rather than driven by anyone, and persisting them
+    // would bury the rows that describe actual use.
+    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_LOGGING_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skip) return next.handle();
 
     const request = context.switchToHttp().getRequest<RequestWithId>();
     const response = context.switchToHttp().getResponse<FastifyReply>();

@@ -6,9 +6,11 @@ import {
   HttpException,
 } from "@nestjs/common";
 import { Observable, tap, catchError } from "rxjs";
+import { Reflector } from "@nestjs/core";
 import { v4 as uuidv4 } from "uuid";
 import { AppLoggerService } from "@/infra/logger/logger.service";
 import { FastifyRequest, FastifyReply } from "fastify";
+import { SKIP_LOGGING_KEY } from "@/common/decorators/auth.decorator";
 
 export const REQUEST_ID_HEADER = "X-Request-ID";
 
@@ -18,7 +20,10 @@ interface RequestWithId extends FastifyRequest {
 
 @Injectable()
 export class RequestIdInterceptor implements NestInterceptor {
-  constructor(private readonly logger: AppLoggerService) {}
+  constructor(
+    private readonly logger: AppLoggerService,
+    private readonly reflector: Reflector,
+  ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     // HTTP-only. This interceptor reads a Fastify request and writes a response
@@ -39,6 +44,16 @@ export class RequestIdInterceptor implements NestInterceptor {
 
     // Set request ID in response headers
     void response.header(REQUEST_ID_HEADER, requestId);
+
+    // Infrastructure routes opt out of the *logging*, not of the id: a metrics
+    // scrape still gets its header and still correlates, it just does not
+    // announce itself every fifteen seconds. The id has to be assigned either
+    // way, because `ResponseInterceptor` and `GlobalExceptionFilter` read it.
+    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_LOGGING_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skip) return next.handle();
 
     const method: string = request.method;
     const url: string = request.url;

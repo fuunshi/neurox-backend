@@ -12,6 +12,7 @@ import { ApiModule } from "./api/api.module";
 import { ApplicationModule } from "./application/application.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { InfraModule } from "./infra/infra.module";
+import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
   imports: [
@@ -19,6 +20,9 @@ import { InfraModule } from "./infra/infra.module";
     IntegrationsModule,
     ApplicationModule,
     ApiModule,
+    // Metrics and health. Not under `api/`: those routes are not the
+    // application's surface, and they opt out of the request pipeline.
+    ObservabilityModule,
     // JwtModule is registered by InfraModule so the worker gets it too.
   ],
   controllers: [AppController],

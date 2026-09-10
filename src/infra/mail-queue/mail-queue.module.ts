@@ -23,6 +23,9 @@ import { MAIL_QUEUE_NAME } from "./mail-queue.constants";
     }),
   ],
   providers: [MailQueueService],
-  exports: [MailQueueService],
+  // `BullModule` as well as the service, the way `QueueModule` exports it, so
+  // `@InjectQueue(MAIL_QUEUE_NAME)` works outside this module — the health
+  // check needs to reach the queue itself, not just the thing that writes to it.
+  exports: [MailQueueService, BullModule],
 })
 export class MailQueueModule {}

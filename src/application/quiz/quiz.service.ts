@@ -38,6 +38,7 @@ import {
   type SourceCard,
 } from "./questions";
 import type { QuizListDTO } from "./dto/quiz-list.dto";
+import { MetricsService } from "@/infra/metrics/metrics.service";
 
 /**
  * Quizzes.
@@ -62,6 +63,7 @@ export class QuizService {
   constructor(
     private readonly em: EntityManager,
     private readonly activities: ActivityRecorderService,
+    private readonly metrics: MetricsService,
   ) {}
 
   /**
@@ -189,6 +191,9 @@ export class QuizService {
     if (completed && !wasAlreadyComplete) {
       attempt.status = QUIZ_ATTEMPT_STATUS.COMPLETED;
       attempt.finishedAt = new Date();
+      // Inside the `!wasAlreadyComplete` branch on purpose: answering the last
+      // question twice must not count as two quizzes finished.
+      this.metrics.countQuiz(attempt.format);
     }
 
     await this.em.flush();

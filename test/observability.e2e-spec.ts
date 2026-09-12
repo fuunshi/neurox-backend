@@ -76,6 +76,39 @@ describe("Observability routes (e2e)", () => {
     expect(res.body).not.toHaveProperty("success");
   });
 
+  it("serves Prometheus text, not the envelope", async () => {
+    const res = await request(app.getHttpServer()).get("/metrics");
+
+    expect(res.status).toBe(200);
+    // The exact type Prometheus requires. A JSON body here is a scrape that
+    // fails with a parse error rather than a metric that looks wrong.
+    expect(String(res.headers["content-type"])).toContain("text/plain");
+    expect(String(res.headers["content-type"])).toContain("version=0.0.4");
+    expect(res.text).toContain("# HELP");
+    expect(res.text).not.toContain('"success"');
+  });
+
+  it("labels requests by route pattern, and does not count itself", async () => {
+    // Something ordinary first, so there is a series to look for.
+    await request(app.getHttpServer()).get("/");
+
+    const res = await request(app.getHttpServer()).get("/metrics");
+
+    expect(res.text).toMatch(/http_requests_total\{[^}]*route="\/"/);
+    // A scrape measuring itself would make this the busiest route on the
+    // dashboard, which is worse than useless.
+    expect(res.text).not.toMatch(/route="\/metrics"/);
+    expect(res.text).not.toMatch(/route="\/health"/);
+  });
+
+  it("exports queue depth and the runtime set", async () => {
+    const res = await request(app.getHttpServer()).get("/metrics");
+
+    expect(res.text).toContain("bullmq_queue_jobs");
+    expect(res.text).toContain("process_cpu_user_seconds_total");
+    expect(res.text).toContain("nodejs_eventloop_lag_seconds");
+  });
+
   it("does not persist a probe as application traffic", async () => {
     // `@SkipLogging()` is what keeps a thirty-second probe from burying the rows
     // that describe what readers did. Counted by path rather than in total,
@@ -84,6 +117,7 @@ describe("Observability routes (e2e)", () => {
 
     await request(app.getHttpServer()).get("/health");
     await request(app.getHttpServer()).get("/health/ready");
+    await request(app.getHttpServer()).get("/metrics");
 
     // The write is fire-and-forget, so it would land a tick later if it landed.
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -102,7 +136,7 @@ describe("Observability routes (e2e)", () => {
 });
 
 const HEALTH_LOG_COUNT_SQL =
-  "select count(*)::int as count from request_log where path like '/health%'";
+  "select count(*)::int as count from request_log where path like '/health%' or path like '/metrics%'";
 
 interface CountRow {
   count: number;

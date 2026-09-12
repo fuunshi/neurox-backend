@@ -19,6 +19,7 @@ import {
   renderNotification,
   type NotificationDraft,
 } from "./notification.templates";
+import { MetricsService } from "@/infra/metrics/metrics.service";
 
 /**
  * Creating, reading and acknowledging notifications.
@@ -44,6 +45,7 @@ export class NotificationService {
   constructor(
     private readonly em: EntityManager,
     private readonly realtime: RealtimeService,
+    private readonly metrics: MetricsService,
   ) {}
 
   /**
@@ -60,6 +62,10 @@ export class NotificationService {
       });
 
       await this.em.flush();
+
+      // Counted after the write, so the figure is rows that exist rather than
+      // attempts to write one.
+      this.metrics.countNotification(draft.type);
 
       const rendered = renderNotification(draft.type, draft.params);
       if (!rendered) return;

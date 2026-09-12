@@ -52,6 +52,7 @@ import {
   GenerationJobListDTO,
   GenerationJobResponseDTO,
 } from "./dto/generation.dto";
+import { MetricsService } from "@/infra/metrics/metrics.service";
 
 /**
  * Turns a `Source` into draft cards in a `Deck`.
@@ -84,6 +85,7 @@ export class GenerationService {
     private readonly chunking: ChunkingService,
     private readonly activities: ActivityRecorderService,
     @InjectQueue(GENERATION_QUEUE_NAME) private readonly queue: Queue,
+    private readonly metrics: MetricsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -265,6 +267,7 @@ export class GenerationService {
       }
 
       job.cardsCreated = cards.length;
+      this.metrics.countGenerated(job.provider, cards.length);
       job.status = GENERATION_JOB_STATUS.SUCCEEDED;
       job.finishedAt = new Date();
 

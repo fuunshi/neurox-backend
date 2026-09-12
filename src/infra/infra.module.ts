@@ -2,6 +2,7 @@ import { AuditModule } from "@/infra/audit/audit.module";
 import { ConfigModule } from "@/infra/config/config.module";
 import { LoggerModule } from "@/infra/logger/logger.module";
 import { MailQueueModule } from "@/infra/mail-queue/mail-queue.module";
+import { MetricsModule } from "@/infra/metrics/metrics.module";
 import { QueueModule } from "@/infra/queue/queue.module";
 import { SettingsModule } from "@/infra/settings/settings.module";
 import { ThrottlerModule } from "@/infra/throttler/throttler.module";
@@ -33,6 +34,11 @@ import { JwtModule } from "@nestjs/jwt";
     LoggerModule,
     MailQueueModule,
     QueueModule,
+    /**
+     * After both queue modules: it registers a scrape-time gauge that reads the
+     * queues those two declare, and the tokens have to exist first.
+     */
+    MetricsModule,
     SettingsModule,
     ThrottlerModule,
     TokenModule,
@@ -69,6 +75,7 @@ import { JwtModule } from "@nestjs/jwt";
     LoggerModule,
     MailQueueModule,
     QueueModule,
+    MetricsModule,
     SettingsModule,
     ThrottlerModule,
     TokenModule,

@@ -36,6 +36,7 @@ interface PreviousSchedulingState extends SchedulingState {
   lastReviewedAt: string | null;
 }
 import { computeStreak, fillDays, retentionRate } from "./stats";
+import { MetricsService } from "@/infra/metrics/metrics.service";
 
 /**
  * Studying: what is due, and what a review does to the schedule.
@@ -55,6 +56,7 @@ export class StudyService {
   constructor(
     private readonly em: EntityManager,
     private readonly improver: CardImproverService,
+    private readonly metrics: MetricsService,
   ) {}
 
   /**
@@ -142,6 +144,9 @@ export class StudyService {
       repetitions: card.repetitions,
       lapses: card.lapses,
     };
+
+    // The core action of the product, and the one worth watching move.
+    this.metrics.countReview(rating);
 
     const now = new Date();
     const scheduled = schedule(before, rating, now);

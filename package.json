@@ -64,6 +64,7 @@
     "@nestjs/terminus": "^12.1.0",
     "@nestjs/throttler": "^6.7.0",
     "@nestjs/websockets": "^12.1.0",
+    "@prometheus-io/client": "^0.16.1",
     "amqp-connection-manager": "^5.0.0",
     "amqplib": "^0.10.9",
     "bcryptjs": "^3.0.3",

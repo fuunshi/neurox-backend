@@ -13,6 +13,7 @@ import { ApplicationModule } from "./application/application.module";
 import { IntegrationsModule } from "./integrations/integrations.module";
 import { InfraModule } from "./infra/infra.module";
 import { ObservabilityModule } from "./observability/observability.module";
+import { HttpMetricsInterceptor } from "./observability/http-metrics.interceptor";
 
 @Module({
   imports: [
@@ -58,6 +59,10 @@ import { ObservabilityModule } from "./observability/observability.module";
     {
       provide: APP_INTERCEPTOR,
       useClass: RequestLogInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: HttpMetricsInterceptor,
     },
   ],
 })

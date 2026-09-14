@@ -15,7 +15,8 @@ Source of truth for how this backend is structured, named, and organized. Claude
 | HTTP | Fastify 5 (`@nestjs/platform-fastify`) | `@fastify/compress`, `@fastify/helmet` registered in `main.ts` |
 | API docs | `@nestjs/swagger` | Served at `/api/docs`, bearer auth configured. **Requires `@fastify/static`** — it is loaded dynamically by `SwaggerModule.setup()`, so it has no import statement and is easy to prune by mistake. |
 | Database | PostgreSQL 16 + **MikroORM 7** | `defineEntity` API — v7 removed decorators. UUID PKs rely on a `gen_random_uuid()` DB default. |
-| Cache / queue | Redis 7.4 + BullMQ 5 (`@nestjs/bullmq`) | Redis backs BullMQ only; `RedisService` is wired but unused (see §14.2) |
+| Cache / queue | Redis 7.4 + BullMQ 5 (`@nestjs/bullmq`) | Redis backs BullMQ only; `RedisService` is unreachable — `RedisModule` is commented out of `InfraModule` and its configuration disagrees with BullMQ's (see §14.2, §16.4) |
+| Metrics & health | `@prometheus-io/client`, `@nestjs/terminus` | The Prometheus organisation's own client, formerly published as `prom-client`. `/metrics`, `/health`, `/health/ready` — see §16 |
 | Email | nodemailer + MJML + Handlebars | MJML/Handlebars render `.mjml.hbs` templates; Mailpit captures mail in dev |
 | Auth | `@nestjs/jwt`, bcryptjs (hashing), speakeasy (TOTP), qrcode (MFA QR) | JWT is stateless for access; refresh/reset tokens stored in `token` table |
 | Validation | class-validator + class-transformer | Global `ValidationPipe`: `transform`, `whitelist`, `forbidNonWhitelisted` |
@@ -271,7 +272,7 @@ Code style is Prettier-owned (double quotes, semicolons, 2-space indent, `printW
 ## 14. Open questions / known deviations
 
 1. **Duplicated DTOs.** `api/<feature>-api/dto/*` are byte-identical to `application/<feature>/dto/*`. Decide the single canonical location (application looks like the intent) and delete the copies. `RecoverAccountDTO` exists only under `api/`, so the duplication is inconsistent as well as redundant. The `api/*/<feature>.service.ts` re-export shims are gone.
-2. **`RedisService` is wired but unused.** `src/infra/redis` is provided and exported, and `RedisModule` is commented out of `InfraModule`. The intent is caching and locks, not now. Either enable it or delete it until needed.
+2. **`RedisService` is unreachable, and misconfigured when reached.** `RedisModule` is commented out of `InfraModule`, so nothing constructs it — §1 used to say "wired but unused", which was already generous. Worse, it reads `redis.url` while BullMQ reads `redis.host`/`redis.port`, and in `.env` those name different hosts (the compose service and `localhost`), so **enabling it as it stands gives you a cache that cannot connect**. Measured, not inferred: `getaddrinfo ENOTFOUND redis`. Either delete it, or make its configuration agree with BullMQ's before enabling it. See §16.4.
 3. **RabbitMQ is configured but unwired.** Deps, the `rabbitmq` config namespace, the compose service and `RABBITMQ_*` vars all remain, and a complete producer-side AMQP mail queue is preserved at `src/infra/mail-queue/amqp`. **This is deliberate** — the BullMQ `MailQueueModule` is the live implementation, and the AMQP path is kept for reference rather than exercised. Switching to it would also require an AMQP consumer to replace `EmailWorkerProcessor`.
 4. **`Activity` has no `deletedAt`.** Every other user-facing model is soft-deletable; `Activity` is the only one without it, so activities outlive a soft-deleted actor and cannot be hidden. Deliberate or oversight?
 5. **`token.token` stores the plaintext token** alongside `token_hash`. The hash is what lookups use, so the plaintext column is redundant — and it is the more serious of the two, because a dump or a backup then hands over usable refresh and reset tokens directly, which is the thing hashing exists to prevent. Dropping it needs a migration and a check that nothing reads it.
@@ -339,3 +340,83 @@ added, ask which processes construct it before deciding where it lives.
 `QueueEvents` is also why the API learns about a finished run at all: the worker
 writes the row, but BullMQ's own completion event is what lets the API process —
 the only one with a socket — announce it.
+
+## 16. Observability — metrics and health
+
+Three routes are deliberately **not** part of the application's API. They share
+the API's port, and they are the only routes in this codebase that are not for
+readers.
+
+| Route | Answers | Touches |
+| --- | --- | --- |
+| `GET /health` | Is this process alive? | Nothing |
+| `GET /health/ready` | Should it take traffic? | Postgres, Redis, the queues |
+| `GET /metrics` | Prometheus exposition | The registry, and the queues at scrape time |
+
+`docker-compose.uat.yml` has probed `GET /health` every thirty seconds since it
+was written. That probe named a route which did not exist until this section did,
+so the UAT container's healthcheck was failing the whole time.
+
+### 16.1 They are not `src/api/`
+
+§3 defines `api/` as "controllers only, one folder per feature". These are not
+features: they are not for readers, they are not in the app's navigation, they
+carry no auth context, and none of them belongs in the Swagger document as
+something a client might call. They live at `src/observability/`.
+
+The **metrics registry**, though, is at `src/infra/metrics/`. Two layers need it —
+the controller renders it, and application services increment it — and §5's rule
+is `api → application → infra`, so `infra` is the only place both can reach. A
+registry under `observability/` would be one nothing could increment.
+
+### 16.2 Opting out of the pipeline
+
+§6's pipeline applies to every HTTP route. These three decline most of it, and
+each opt-out is a mechanism that already existed except the third:
+
+| Concern | Opt-out |
+| --- | --- |
+| `AuthGuard` | `@Public()` |
+| `HttpThrottlerGuard` | `@SkipThrottle()` |
+| `RequestLogInterceptor`, `RequestIdInterceptor` | `@SkipLogging()` |
+| `ResponseInterceptor` | `@Res()` — the handler sends its own body |
+
+`@SkipLogging()` is the one worth knowing. A scrape every fifteen seconds is
+5,760 rows a day in `request_log`, describing nobody and pushing the rows that
+describe real use further down every query that reads them. It suppresses
+**logging only**: `RequestIdInterceptor` still assigns the id, because
+`ResponseInterceptor` and `GlobalExceptionFilter` both read it.
+
+`@Res()` is what keeps the envelope off, and it is not free.
+`HealthCheckService.check()` **throws** `ServiceUnavailableException` when a probe
+is down rather than returning a failed result — left uncaught that reaches
+`GlobalExceptionFilter`, which wraps it in the envelope and hands a container
+runtime a body shaped for a browser client. The controller catches it and sends
+the payload as it stands, with **503** rather than a 200 carrying an error body,
+because the status code is what a container runtime acts on.
+
+### 16.3 Cardinality
+
+`/metrics` is labelled by **route pattern**, never by URL. This is the one thing
+that has to be right: a Prometheus series is held in the scraper's memory for as
+long as it is scraped, so a URL label would mint a series per deck id and take the
+endpoint down within a week. The pattern is read from Nest's route metadata, so it
+resolves the same under the Express adapter the e2e tests boot.
+
+Neither the scrape nor the probes measure themselves. A scrape that counted itself
+would be the busiest route on the dashboard.
+
+### 16.4 Two Redis configurations, and they disagree
+
+`RedisService` reads `redis.url` (`REDIS_URL`); BullMQ reads `redis.host` and
+`redis.port`. In this project's `.env` those name different hosts — the compose
+service and `localhost` respectively — so `RedisService` cannot resolve a host
+outside a container and has never connected. The readiness probe therefore checks
+the BullMQ configuration, which is the Redis the application actually depends on.
+See §14.2.
+
+### 16.5 The worker has no metrics, deliberately
+
+It has no HTTP server and no port by design (§2, §15.4). Adding one would mean a
+second `listen()`, which contradicts `worker.main.ts`. Queue depth is exposed from
+the API process instead, which reads the same Redis the worker does.

@@ -9,7 +9,14 @@ const TokenSchema = defineEntity({
   properties: {
     id: p.uuid().primary().defaultRaw("gen_random_uuid()"),
     user: () => p.manyToOne(User).joinColumn("user_id").inversedBy("tokens"),
-    token: p.string().length(500).unique(),
+    /*
+     * There is deliberately no `token` column beside this one. The row used to
+     * carry the raw token as well as its hash, and only the hash was ever read
+     * — so the plaintext's sole effect was to make a database dump a set of
+     * live refresh and password-reset tokens. `Migration20260928120000` drops
+     * it. `CreateTokenData.token` stays on the interface, because it is the
+     * input to `hashToken` rather than a column.
+     */
     tokenHash: p.string().fieldName("token_hash").unique(),
     type: p.enum(() => DB_TOKEN_TYPE).nativeEnumName("token_type"),
     expiresAt: p.datetime().fieldName("expires_at"),

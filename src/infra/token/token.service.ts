@@ -47,9 +47,10 @@ export class TokenService {
   async storeToken(data: CreateTokenData): Promise<void> {
     const tokenHash = this.hashToken(data.token);
 
+    // `data.token` is the *input* to the hash, not a column: the plaintext is
+    // never persisted. See `Migration20260928120000`.
     this.em.create(Token, {
       user: this.em.getReference(User, data.userId),
-      token: data.token,
       tokenHash,
       type: data.type,
       expiresAt: data.expiresAt,

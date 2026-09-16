@@ -26,7 +26,18 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
-    command: ["pnpm", "run", "start:prod"]
+    # `node` directly rather than `pnpm run start:prod`, which is what this
+    # used to be and why the container crash-looped: the `runner` stage copies
+    # `package.json` but not `pnpm-lock.yaml`, so pnpm 12 cannot verify the
+    # installed tree and re-installs on every start — which runs the root
+    # `prepare` script, and `husky` is a devDependency absent from the prod
+    # image (`sh: husky: not found`, exit 127).
+    #
+    # It also matters for shutdown: as PID 1, pnpm does not forward SIGTERM to
+    # its child, so `enableGracefulShutdown` would never see the signal it
+    # drains on. This mirrors `docker-compose.uat.yml`, which has always
+    # invoked `node` directly.
+    command: ["node", "dist/main.js"]
     restart: unless-stopped
 
   worker:
@@ -53,7 +64,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: ["pnpm", "run", "start:worker:prod"]
+    # Both reasons above apply unchanged; the worker has no HTTP server, so the
+    # signal path is the only one that ends it. The path matches
+    # `start:worker:prod` in package.json, as `docker-compose.uat.yml` notes.
+    command: ["node", "dist/worker.main.js"]
     restart: unless-stopped
 
   redis:

@@ -19,6 +19,17 @@ export class ActivitiesListDTO extends CursorPaginationQueryDTO {
   @IsString()
   entityId?: string;
 
+  /*
+   * Required, and deliberately the only pair here without `@IsOptional()`.
+   *
+   * That absence is load-bearing rather than an oversight to be tidied away.
+   * `ActivitiesService.getActivities` cannot scope its query without a context,
+   * so a call carrying neither value must never reach it — before this was
+   * understood, the only thing preventing that was these two decorators being
+   * missing. The service now refuses such a call in its own right, so this is
+   * the second lock rather than the only one. Both are held by
+   * `activities-list.dto.spec.ts`.
+   */
   @ApiPropertyOptional({ description: "Context types", enum: CONTEXT_TYPES })
   @IsEnum(CONTEXT_TYPES)
   contextType!: ContextType;

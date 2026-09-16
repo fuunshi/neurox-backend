@@ -1040,7 +1040,6 @@ export class AuthService {
 
       tx.create(Token, {
         user: tx.getReference(User, userId),
-        token: verificationToken,
         tokenHash: this.tokenService.hashToken(verificationToken),
         type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
         expiresAt,
@@ -1097,7 +1096,6 @@ export class AuthService {
 
       tx.create(Token, {
         user: tx.getReference(User, user.id),
-        token: verificationToken,
         tokenHash: this.tokenService.hashToken(verificationToken),
         type: DB_TOKEN_TYPE.EMAIL_VERIFICATION,
         expiresAt,

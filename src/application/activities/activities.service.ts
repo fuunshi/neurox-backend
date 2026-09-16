@@ -23,20 +23,39 @@ export class ActivitiesService {
       );
     }
 
-    if (dto.contextType && dto.contextId) {
-      this.verifyContextAccess(user, dto.contextType, dto.contextId);
+    /*
+     * Required, and required *together*.
+     *
+     * This used to read `if (dto.contextType && dto.contextId)`, which meant a
+     * call supplying neither skipped `verifyContextAccess` entirely and fell
+     * through to `em.find(Activity, {})` — every user's activity, actor names
+     * included. The only thing standing between that and the wire was the
+     * DTO's own validation, and it stood there by accident: `contextType` and
+     * `contextId` are the one pair in `ActivitiesListDTO` missing
+     * `@IsOptional()`, while every sibling field carries it.
+     *
+     * An authorization rule that holds because of an absent decorator is one
+     * tidy-up away from not holding — the obvious "fix" for that inconsistency
+     * is to add the missing `@IsOptional()`. So the rule is stated here, where
+     * it is about access rather than about input shape, and the DTO's copy of
+     * it is pinned by a test.
+     */
+    if (!dto.contextType || !dto.contextId) {
+      throw new BadRequestException(
+        "contextType and contextId must be provided together",
+      );
     }
 
-    const where: FilterQuery<Activity> = {};
+    this.verifyContextAccess(user, dto.contextType, dto.contextId);
+
+    const where: FilterQuery<Activity> = {
+      contextType: dto.contextType,
+      contextId: dto.contextId,
+    };
 
     if (dto.entityType && dto.entityId) {
       where.entityType = dto.entityType;
       where.entityId = dto.entityId;
-    }
-
-    if (dto.contextType && dto.contextId) {
-      where.contextType = dto.contextType;
-      where.contextId = dto.contextId;
     }
 
     if (dto.actorId?.length) {

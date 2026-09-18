@@ -1,6 +1,8 @@
 export * from "./account-status.enum";
 export * from "./audit-action.enum";
 export * from "./card-status.enum";
+export * from "./content-status.enum";
+export * from "./curriculum-kind.enum";
 export * from "./generation-job-status.enum";
 export * from "./quiz-attempt-status.enum";
 export * from "./quiz-format.enum";
@@ -28,4 +30,8 @@ export const NATIVE_ENUM_NAMES = {
   ReviewRating: "review_rating",
   QuizFormat: "quiz_format",
   QuizAttemptStatus: "quiz_attempt_status",
+  // Both belong to the public study-material model. They are new here rather
+  // than inherited from the Prisma schema, so their names are ours to choose.
+  CurriculumKind: "curriculum_kind",
+  ContentStatus: "content_status",
 } as const;

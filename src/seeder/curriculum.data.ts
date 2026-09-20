@@ -39,7 +39,17 @@ export interface SeedCourse {
 
 export const TU_BCA: SeedCourse = {
   slug: "bca",
-  title: "BCA — Bachelor of Computer Applications",
+  /**
+   * Parentheses rather than an em dash, deliberately.
+   *
+   * The title tag template already appends "— neurox", and the pages append
+   * their own qualifier, so a dash inside the name itself produces
+   * "BCA — Bachelor of Computer Applications — all semesters — neurox": three
+   * dashes and a title that reads like a list of fragments. Bracketing the
+   * expansion keeps the short name available as everything before the bracket,
+   * which is what the frontend uses to build titles.
+   */
+  title: "BCA (Bachelor of Computer Applications)",
   code: "TU",
   description:
     "Four years, eight semesters, 126 credit hours, under Tribhuvan University's Faculty of Humanities and Social Sciences. Every subject below is common to all TU-affiliated colleges.",

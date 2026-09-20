@@ -1,7 +1,7 @@
 import { ContentService } from "@/application/content/content.service";
 import { TaxonomyService } from "@/application/content/taxonomy.service";
 import {
-  ContentTreeResponseDTO,
+  CurriculumNodeDTO,
   NoteDetailDTO,
   NoteListQueryDTO,
   NoteSummaryDTO,
@@ -63,14 +63,24 @@ export class ContentController {
     private readonly taxonomy: TaxonomyService,
   ) {}
 
+  /**
+   * The whole syllabus tree, flat.
+   *
+   * Returns the array itself rather than `{ data: [...] }`. The global
+   * `ResponseInterceptor` already wraps every response in an envelope, and the
+   * frontend unwraps exactly one level of it — so a second `data` here arrives
+   * as an object where the caller expects a list. That is not a style
+   * preference: it is the difference between `tree.filter` working and a 500 on
+   * every page that touches the tree.
+   */
   @Get("tree")
   @Public()
   @SkipLogging()
   @Throttle(PUBLIC_READ_LIMITS)
   @ApiOperation({ summary: "The whole syllabus tree, flat" })
-  @ApiOkResponse({ type: ContentTreeResponseDTO })
-  async tree(): Promise<ContentTreeResponseDTO> {
-    return { data: await this.taxonomy.publicTree() };
+  @ApiOkResponse({ type: [CurriculumNodeDTO] })
+  async tree(): Promise<CurriculumNodeDTO[]> {
+    return this.taxonomy.publicTree();
   }
 
   @Get("notes")

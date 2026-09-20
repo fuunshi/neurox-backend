@@ -70,11 +70,6 @@ export class NoteDetailDTO extends NoteSummaryDTO {
   breadcrumbs!: BreadcrumbDTO[];
 }
 
-export class ContentTreeResponseDTO {
-  @ApiProperty({ type: [CurriculumNodeDTO] })
-  data!: CurriculumNodeDTO[];
-}
-
 export class NoteListQueryDTO {
   @ApiPropertyOptional({
     description:

@@ -385,8 +385,30 @@ export class GenerationService {
     );
   }
 
-  /** The generator a new job should use: a real model when one is configured,
-   *  the deterministic fallback otherwise. */
+  /**
+   * The generator a new job should use.
+   *
+   * **The order is a stated preference, not the registration order.** Relying
+   * on the array meant the choice was made by whoever last edited the module's
+   * `useFactory` — invisible from here, and silently changed by a reordering
+   * that looked cosmetic. Writing it out means a change to how cards get
+   * generated is a change to this list, in the file that decides it.
+   *
+   * 1. **`neurox-brain`** — our own service, preferred when it is switched on.
+   *    `NEUROX_BRAIN_ENABLED` is explicit, so turning it on *is* the statement
+   *    of intent; defaulting to a paid third party while a free local service
+   *    sits enabled would be the surprising choice, not this one.
+   * 2. **Gemini** — the ceiling. It is the only generator that can paraphrase
+   *    or read a concept explained across a paragraph, and when it is
+   *    configured it is because someone decided to pay for that.
+   * 3. **The heuristic** — no model, no network, no service. Always available,
+   *    which is what makes it the floor the whole pipeline can rest on.
+   *
+   * Only `isAvailable()` is consulted, and each generator answers that from
+   * configuration rather than by probing. A probe here would make this
+   * non-deterministic — two identical jobs could run on different providers
+   * with nothing recording why.
+   */
   private defaultGenerator(): CardGenerator {
     const available = this.generators.filter((generator) =>
       generator.isAvailable(),
@@ -398,9 +420,23 @@ export class GenerationService {
       );
     }
 
-    return (
-      available.find((g) => g.provider === CARD_PROVIDER.GEMINI) ?? available[0]
-    );
+    const preference = [
+      CARD_PROVIDER.BRAIN,
+      CARD_PROVIDER.GEMINI,
+      CARD_PROVIDER.HEURISTIC,
+    ];
+
+    for (const provider of preference) {
+      const generator = available.find(
+        (candidate) => candidate.provider === provider,
+      );
+      if (generator) return generator;
+    }
+
+    // A generator registered but not listed above. Taking it is better than
+    // refusing to generate, and `generatorFor` re-resolves by provider when the
+    // job runs, so whatever is chosen here is recorded honestly on the job.
+    return available[0];
   }
 
   /** The generator recorded on the job, so a job always runs what it claims. */

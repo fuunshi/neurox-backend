@@ -10,6 +10,7 @@ import {
 } from "./generators/card-generator.interface";
 import { GeminiCardGenerator } from "./generators/gemini.generator";
 import { HeuristicCardGenerator } from "./generators/heuristic.generator";
+import { NlpCardGenerator } from "./generators/nlp.generator";
 
 /**
  * Card generation.
@@ -35,16 +36,20 @@ import { HeuristicCardGenerator } from "./generators/heuristic.generator";
     GenerationService,
     HeuristicCardGenerator,
     GeminiCardGenerator,
+    NlpCardGenerator,
     {
       provide: CARD_GENERATORS,
-      inject: [GeminiCardGenerator, HeuristicCardGenerator],
-      // Ordered best-first. `GenerationService.defaultGenerator` still filters
-      // by `isAvailable()` and prefers Gemini explicitly, so the order here is a
-      // fallback rather than the decision.
+      inject: [NlpCardGenerator, GeminiCardGenerator, HeuristicCardGenerator],
+      // **The order here is deliberately not the preference order.** That lives
+      // in `GenerationService.defaultGenerator`, written out explicitly, so
+      // that changing which generator runs is a change to a list in the file
+      // that decides it rather than to an array that looks cosmetic. This
+      // collection is the set of what exists; that method is the choice.
       useFactory: (
+        nlp: CardGenerator,
         gemini: CardGenerator,
         heuristic: CardGenerator,
-      ): CardGenerator[] => [gemini, heuristic],
+      ): CardGenerator[] => [nlp, gemini, heuristic],
     },
   ],
   exports: [GenerationService],

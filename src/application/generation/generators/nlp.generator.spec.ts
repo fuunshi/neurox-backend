@@ -1,6 +1,9 @@
 import type { TextChunk } from "@/application/source/chunking.service";
 import type { NeuroxBrainClient } from "@/integrations/neurox-brain/neurox-brain.client";
-import type { BrainAnalysis, BrainCard } from "@/integrations/neurox-brain/neurox-brain.types";
+import type {
+  BrainAnalysis,
+  BrainCard,
+} from "@/integrations/neurox-brain/neurox-brain.types";
 import { describe, expect, it, vi } from "vitest";
 import { NlpCardGenerator } from "./nlp.generator";
 
@@ -10,7 +13,9 @@ function makeClient(options: {
   enabled?: boolean;
   analyse?: (text: string) => Promise<BrainAnalysis>;
 }) {
-  const analyse = vi.fn(options.analyse ?? (() => Promise.resolve(analysis([]))));
+  const analyse = vi.fn(
+    options.analyse ?? (() => Promise.resolve(analysis([]))),
+  );
   const isEnabled = vi.fn(() => options.enabled ?? true);
 
   return {
@@ -32,7 +37,13 @@ function analysis(cards: Partial<BrainCard>[], elapsedMs = 10): BrainAnalysis {
     quiz: [],
     keywords: [],
     summary: [],
-    stats: { sentences: 3, tokens: 20, chunks: 2, elapsed_ms: elapsedMs, model: "en_core_web_md" },
+    stats: {
+      sentences: 3,
+      tokens: 20,
+      chunks: 2,
+      elapsed_ms: elapsedMs,
+      model: "en_core_web_md",
+    },
   };
 }
 
@@ -81,7 +92,13 @@ describe("NlpCardGenerator", () => {
     const { client } = makeClient({
       analyse: () =>
         Promise.resolve(
-          analysis([{ front: "stack", back: "A LIFO structure.", evidence: "A stack is a LIFO structure." }]),
+          analysis([
+            {
+              front: "stack",
+              back: "A LIFO structure.",
+              evidence: "A stack is a LIFO structure.",
+            },
+          ]),
         ),
     });
 
@@ -104,7 +121,11 @@ describe("NlpCardGenerator", () => {
     });
 
     const result = await new NlpCardGenerator(client).generate({
-      chunks: [chunk("A stack is a LIFO structure."), chunk("bad chunk"), chunk("A queue is FIFO.")],
+      chunks: [
+        chunk("A stack is a LIFO structure."),
+        chunk("bad chunk"),
+        chunk("A queue is FIFO."),
+      ],
       maxCards: 10,
     });
 
@@ -116,11 +137,7 @@ describe("NlpCardGenerator", () => {
     const { client, analyse } = makeClient({
       analyse: () =>
         Promise.resolve(
-          analysis([
-            { front: "one" },
-            { front: "two" },
-            { front: "three" },
-          ]),
+          analysis([{ front: "one" }, { front: "two" }, { front: "three" }]),
         ),
     });
 

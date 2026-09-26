@@ -3,6 +3,7 @@ import { AccountApplicationModule } from "./account/account.module";
 import { ActivitiesApplicationModule } from "./activities/activities.module";
 import { AnalyticsApplicationModule } from "./analytics/analytics.module";
 import { AuthApplicationModule } from "./auth/auth.module";
+import { ContentApplicationModule } from "./content/content.module";
 import { DeckApplicationModule } from "./deck/deck.module";
 import { GenerationApplicationModule } from "./generation/generation.module";
 import { GenerationEventsModule } from "./generation/generation-events.module";
@@ -25,6 +26,7 @@ import { UserApplicationModule } from "./user/user.module";
     UserApplicationModule,
     ActivitiesApplicationModule,
     AccountApplicationModule,
+    ContentApplicationModule,
     DeckApplicationModule,
     SourceApplicationModule,
     GenerationApplicationModule,
@@ -40,6 +42,7 @@ import { UserApplicationModule } from "./user/user.module";
     UserApplicationModule,
     ActivitiesApplicationModule,
     AccountApplicationModule,
+    ContentApplicationModule,
     DeckApplicationModule,
     SourceApplicationModule,
     GenerationApplicationModule,

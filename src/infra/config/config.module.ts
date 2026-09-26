@@ -6,6 +6,7 @@ import authConfig from "./auth.config";
 import databaseConfig from "./database.config";
 import geminiConfig from "./gemini.config";
 import maintenanceConfig from "./maintenance.config";
+import neuroxBrainConfig from "./neurox-brain.config";
 import observabilityConfig from "./observability.config";
 import rabbitmqConfig from "./rabbitmq.config";
 import redisConfig from "./redis.config";
@@ -27,6 +28,7 @@ import throttlerConfig from "./throttler.config";
         rabbitmqConfig,
         smtpConfig,
         geminiConfig,
+        neuroxBrainConfig,
         maintenanceConfig,
         observabilityConfig,
       ],

@@ -10,6 +10,15 @@ export const CARD_PROVIDER = {
   HEURISTIC: "heuristic",
   /** Hosted LLM provider. */
   GEMINI: "gemini",
+  /**
+   * The `neurox-brain` service: spaCy, TF-IDF and TextRank, running locally.
+   *
+   * Not an LLM and not a hosted API — it is a separate process we operate. It
+   * sits between the other two deliberately: far better than the heuristic at
+   * reading a definition spread across three sentences, and with no per-request
+   * cost and no third-party dependency, unlike the hosted model.
+   */
+  BRAIN: "brain",
   /** A locally trained or self-hosted model. */
   LOCAL: "local",
 } as const;

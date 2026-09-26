@@ -2,10 +2,12 @@ export * from "./activity.entity";
 export * from "./app-setting.entity";
 export * from "./audit-log.entity";
 export * from "./card-review.entity";
+export * from "./curriculum-node.entity";
 export * from "./deck.entity";
 export * from "./flash-card.entity";
 export * from "./generation-job.entity";
 export * from "./login-history.entity";
+export * from "./note.entity";
 export * from "./notification.entity";
 export * from "./quiz-answer.entity";
 export * from "./quiz-attempt.entity";
@@ -19,10 +21,12 @@ import { Activity } from "./activity.entity";
 import { AppSetting } from "./app-setting.entity";
 import { AuditLog } from "./audit-log.entity";
 import { CardReview } from "./card-review.entity";
+import { CurriculumNode } from "./curriculum-node.entity";
 import { Deck } from "./deck.entity";
 import { FlashCard } from "./flash-card.entity";
 import { GenerationJob } from "./generation-job.entity";
 import { LoginHistory } from "./login-history.entity";
+import { Note } from "./note.entity";
 import { Notification } from "./notification.entity";
 import { QuizAnswer } from "./quiz-answer.entity";
 import { QuizAttempt } from "./quiz-attempt.entity";
@@ -50,4 +54,7 @@ export const ENTITIES = [
   QuizAttempt,
   QuizAnswer,
   Notification,
+  // The public study-material model — not user-scoped, unlike everything above.
+  CurriculumNode,
+  Note,
 ];

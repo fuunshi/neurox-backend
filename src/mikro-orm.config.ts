@@ -7,10 +7,28 @@ loadEnv();
 
 /**
  * Prisma-style URLs carry a `?schema=public` suffix that the `pg` driver does
- * not understand. Strip everything from `?` on before handing it to MikroORM.
+ * not understand, and the Neon and Supabase dashboards both hand one out by
+ * default. MikroORM reads `schema` from its own options, not the URL.
+ *
+ * **Only that one parameter is removed.** The obvious implementation — split on
+ * `?` and keep the first half — also discards `sslmode=require`, which is the
+ * one parameter a hosted Postgres cannot do without: Neon refuses an
+ * unencrypted connection outright, and `pg` opens one unless the URL asks for
+ * TLS. The failure that produces is a connection error that reads like bad
+ * credentials, which is a long way from the actual cause.
  */
 function normaliseDatabaseUrl(url: string | undefined): string | undefined {
-  return url?.split("?")[0];
+  if (!url) return undefined;
+
+  const separator = url.indexOf("?");
+  if (separator === -1) return url;
+
+  const base = url.slice(0, separator);
+  const params = new URLSearchParams(url.slice(separator + 1));
+  params.delete("schema");
+
+  const rest = params.toString();
+  return rest ? `${base}?${rest}` : base;
 }
 
 export default defineConfig({

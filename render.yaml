@@ -1,0 +1,137 @@
+# Render blueprint for the API and its worker.
+#
+# Both run the same image and differ only in their command, which is the same
+# arrangement the local compose file uses — the worker imports the same domain
+# modules, so a second image would be a second thing to keep in step for no
+# benefit.
+#
+# `sync: false` on a value means "Render will prompt for this rather than
+# reading it from the repository". Every secret is `sync: false`; nothing here
+# is committed.
+
+services:
+  - type: web
+    name: neurox-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore
+    plan: starter
+    # Render restarts the service if this stops answering. The endpoint is the
+    # one that deliberately touches no dependency, so a database blip does not
+    # cause a restart loop — which is exactly what it was designed for.
+    healthCheckPath: /health
+    autoDeploy: true
+    # Runs once per deploy, after the image is built and before the new version
+    # takes traffic. This is the only place a migration may run: doing it in the
+    # container's start command would run it again on every restart and on every
+    # replica, and two migrators racing is how a schema ends up half applied.
+    #
+    # The CLI is a runtime dependency, so it is present in the production image
+    # — see the Dockerfile.
+    preDeployCommand: node_modules/.bin/mikro-orm migration:up
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT is deliberately not set. Render injects it and routes to the value
+      # it chose; pinning it here would mean the app listening somewhere Render
+      # is not sending traffic. The app reads `process.env.PORT` and falls back
+      # to 3000 for local use.
+
+      # --- database (Neon) --------------------------------------------------
+      # Neon's pooled connection string. Use the `-pooler` host: Render's
+      # instances are short-lived and serverless Postgres counts connections
+      # per instance, so the direct URL exhausts the limit under any real load.
+      - key: DATABASE_URL
+        sync: false
+
+      # --- cache and queue --------------------------------------------------
+      # Redis and RabbitMQ are not covered by this file; point these at
+      # wherever they run. Private networking is preferable to a public address
+      # for both, since neither speaks TLS by default here.
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: "6379"
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+
+      # --- secrets ----------------------------------------------------------
+      - key: JWT_SECRET
+        sync: false
+      - key: TOKEN_HASH_SECRET
+        sync: false
+
+      # --- addresses --------------------------------------------------------
+      # Both are absolute and both appear in emails, so they must name the
+      # public origins rather than anything internal.
+      - key: APP_BASE_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+
+      # --- mail -------------------------------------------------------------
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "true"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false
+
+      # --- the NLP service --------------------------------------------------
+      # Set this to the brain's Render URL once it is deployed. Leaving it
+      # false is a supported state: generation falls back to the heuristic
+      # generator, which needs no network at all.
+      - key: NEUROX_BRAIN_ENABLED
+        value: "false"
+      - key: NEUROX_BRAIN_URL
+        sync: false
+      - key: NEUROX_BRAIN_TRANSPORT
+        value: http
+
+  - type: worker
+    name: neurox-backend-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore
+    plan: starter
+    dockerCommand: node dist/worker.main.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        value: "6379"
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: TOKEN_HASH_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SUPPORT_EMAIL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

@@ -10,4 +10,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+# The context is uploaded before any instruction runs, so a .env excluded here
+# is a secret that never crosses the wire. Configuration arrives as environment
+# variables at run time instead — a .env copied into an image lands in a layer,
+# and a later `rm` does not take it back out.
 .env
+.env.*

@@ -1,4 +1,5 @@
 import { ActivityRecorderService } from "@/application/activities/activity-recorder.service";
+import { computeStreak } from "@/application/study/stats";
 import {
   ACTIVITY_TYPES,
   CONTEXT_TYPES,
@@ -679,10 +680,26 @@ export class SeederService {
     return {
       reviews: rows.length,
       dueNow,
-      streak: this.streakOf(
-        planned.map((entry) => entry.reviewedAt),
-        now,
-      ),
+      // The app's own function, not a second opinion about what a streak is.
+      // The local version this replaces counted back from today and stopped at
+      // the first empty day, so it reported `0-day streak` for an account whose
+      // `/study/overview` was reporting `current: 1` — `computeStreak` measures
+      // the run from today *or* yesterday, because a day you are still in the
+      // middle of has not broken anything.
+      //
+      // It mattered: the log line is the only thing anyone reads after seeding,
+      // and a zero there looks like a broken seeder rather than a difference of
+      // opinion about the first day.
+      streak: computeStreak(
+        // Bucketed in the demo user's timezone, because that is the bucket the
+        // app reads. The reviews are written at server-local (UTC) hours, so
+        // an 8pm session is already the next day in Kathmandu — the seeder's
+        // own UTC day keys and the ones `/study/overview` groups by disagree
+        // for any review after 18:15 UTC, and the app is the one being
+        // demoed. Same timestamps, same timezone, same answer.
+        planned.map((entry) => this.dayKeyIn(entry.reviewedAt, DEMO_TIMEZONE)),
+        this.dayKeyIn(now, DEMO_TIMEZONE),
+      ).current,
     };
   }
 
@@ -832,23 +849,21 @@ export class SeederService {
     }
   }
 
-  /** Consecutive days ending today with at least one review. */
-  private streakOf(reviewedAt: Date[], now: Date): number {
-    const days = new Set(reviewedAt.map((date) => this.dayKey(date)));
-
-    let streak = 0;
-    let cursor = new Date(now);
-
-    while (days.has(this.dayKey(cursor))) {
-      streak += 1;
-      cursor = this.daysBefore(cursor, 1);
-    }
-
-    return streak;
-  }
-
+  /** The day a timestamp falls on, in UTC. Used by the walk's own day maths. */
   private dayKey(date: Date): string {
     return date.toISOString().slice(0, 10);
+  }
+
+  /**
+   * The day a timestamp falls on, in a named timezone.
+   *
+   * `en-CA` is the locale that formats as `YYYY-MM-DD` — the shape
+   * `computeStreak` compares and the shape the app's aggregate query returns.
+   * Using it avoids hand-rolling an offset, which is the kind of arithmetic
+   * that is wrong twice a year in most of the world.
+   */
+  private dayKeyIn(date: Date, timeZone: string): string {
+    return new Intl.DateTimeFormat("en-CA", { timeZone }).format(date);
   }
 
   private daysBefore(from: Date, days: number): Date {

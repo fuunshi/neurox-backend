@@ -23,7 +23,21 @@
  * be silent.
  */
 
-export type BrainCardKind = "DEFINITION" | "CLOZE" | "RELATION";
+/**
+ * Mirrors `CardKind` in the brain's `schemas.py`. The two sides name each other
+ * and nothing enforces it at build time, so this has to be kept in step by hand.
+ *
+ * `RELATION` was removed on the brain's side: it was declared from the beginning
+ * and produced by nothing, and its name is ambiguous enough — a comparison and a
+ * purpose are both relations — that four specific kinds cannot be built on it.
+ */
+export type BrainCardKind =
+  | "DEFINITION"
+  | "CLOZE"
+  | "PROPERTY"
+  | "PROCESS"
+  | "COMPARISON"
+  | "PURPOSE";
 export type BrainQuizFormat = "MULTIPLE_CHOICE" | "CLOZE";
 
 export interface BrainOptions {

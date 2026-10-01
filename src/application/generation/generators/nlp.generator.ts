@@ -78,10 +78,20 @@ export class NlpCardGenerator implements CardGenerator {
             // Nothing here consumes keywords, a summary or quiz questions: this
             // generator's job is cards. Asking for them would make the brain
             // compute TextRank over every chunk for output that is discarded.
-            includeCloze: true,
+            //
+            // `maxQuizQuestions: 0` is a genuine request for none, which the
+            // brain's schema now allows. It used to be `1` — the smallest value
+            // permitted — and that still made the brain *build* a question, with
+            // its WordNet lookups and distractor ranking, for a result this
+            // generator then dropped.
+            //
+            // Cloze is off because a generated deck is facts a reader recalls,
+            // not sentences with holes in them. Cloze remains a quiz format, and
+            // the quiz is built in this application from the reader's own cards.
+            includeCloze: false,
             maxKeywords: 1,
             maxSummarySentences: 1,
-            maxQuizQuestions: 1,
+            maxQuizQuestions: 0,
           },
         );
 
